@@ -7,7 +7,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"text/template"
 
@@ -82,13 +81,18 @@ func getFieldType(expr ast.Expr) string {
 }
 
 func main() {
-	_, currentFile, _, _ := runtime.Caller(0)
-	file := currentFile
-	dir := filepath.Dir(file)
-	filename := filepath.Base(file)
+	dir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	filename := os.Getenv("GOFILE")
+	if filename == "" {
+		return
+	}
 	if !strings.HasSuffix(filename, ".go") {
 		return
 	}
+	file := filepath.Join(dir, filename)
 	filename = filename[:len(filename)-3]
 	filename_new := fmt.Sprintf("%s_struct_gen.go", filename)
 	filepath_new := filepath.Join(dir, filename_new)
