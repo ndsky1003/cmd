@@ -169,7 +169,51 @@ func main() {
 }
 
 const tmpl = `package {{.PackageName}}
+
+import "go.mongodb.org/mongo-driver/bson"
+
 {{- range .StructDatas}}
+
+// 定义{{.StructName}} 对应字段的key
+{{- range .Fields }}
+const {{ .StructName}}_{{.Name}} = "{{ .Name}}"
+{{- end }}
+
+// Set{{.StructName}} 指定的值,upM
+func (this *{{.StructName}}) GenupM(keys []string) []bson.E {
+	if this == nil {
+		return nil
+	}
+	upM := make([]bson.E, 0, len(keys))
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+		case "{{.Name}}":
+		    upM = append(upM, bson.E{Key: key, Value: this.{{.Name}}})
+         {{- end }}
+		}
+	}
+    return upM
+}
+
+// Set{{.StructName}} 指定的值,incM
+func (this *{{.StructName}}) GenincM(keys []string) []bson.E {
+	if this == nil {
+		return nil
+	}
+	upM := make([]bson.E, 0, len(keys))
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if .IsInc  }}
+		case "{{.Name}}":
+		    upM = append(upM, bson.E{Key: key, Value: this.{{.Name}}})
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return upM
+}
 
 // Set{{.StructName}} 指定的值,需要指定keys
 func (this *{{.StructName}}) Set(delta *{{.StructName}}, keys ...string) {
@@ -214,12 +258,6 @@ func (this *{{.StructName}}) Add(delta *{{.StructName}}) {
     {{- end }}
     {{- end }}
 }
-
-// 定义{{.StructName}} 对应字段的key
-{{- range .Fields }}
-var {{ .StructName}}_{{.Name}} = "{{ .Name}}"
-{{- end }}
-
 
 {{- end }}
 `
