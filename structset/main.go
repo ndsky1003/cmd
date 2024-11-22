@@ -53,7 +53,6 @@ func main() {
 	flag.BoolVar(&fileStructData.IsInc, "i", true, "是否生成结构体的Inc(detal *StructData,keys []string)")
 	flag.BoolVar(&fileStructData.IsAdd, "a", true, "是否生成结构体的Add(detal *StructData)")
 	flag.Parse()
-	fmt.Printf("%+v", fileStructData)
 	if file_path == "" {
 		dir, err := os.Getwd()
 		if err != nil {
@@ -256,6 +255,7 @@ func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
     if len(keys) == 0 {
         return nil, errors.New("no keys provided")
     }
+    {{- if .IsHashNumberKey}}
 	upM := make([]bson.E, 0, len(keys))
 	for _, key := range keys {
 		switch key {
@@ -268,6 +268,9 @@ func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
 		}
 	}
     return upM, nil
+    {{- else}}
+	return nil, errors.New("key is not has number")
+	{{- end }}
 }
 {{- end }}
 
