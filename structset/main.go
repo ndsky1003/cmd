@@ -209,22 +209,18 @@ const tmpl = `package {{.PackageName}}
 
 import (
 	"errors"
-
-{{- if or $.IsUpM $.IsIncM}}
+{{ if or $.IsUpM $.IsIncM}}
 	"go.mongodb.org/mongo-driver/bson"
 {{- end }}
 )
-
 {{- range .StructDatas}}
-{{- if $.IsKey}}
+{{ if $.IsKey}}
 // 定义{{.StructName}} 对应字段的key
 {{- range .Fields }}
 const {{ .StructName}}_{{.Name}} = "{{ .Name}}"
 {{- end }}
 {{- end }}
-
-
-{{- if $.IsUpM}}
+{{ if $.IsUpM}}
 // Set{{.StructName}} 指定的值,upM
 func (this *{{.StructName}}) GenUpdateMap(keys []string) ([]bson.E, error) {
     if this == nil {
@@ -245,8 +241,7 @@ func (this *{{.StructName}}) GenUpdateMap(keys []string) ([]bson.E, error) {
     return upM, nil
 }
 {{- end }}
-
-{{- if $.IsIncM}}
+{{ if $.IsIncM}}
 // Set{{.StructName}} 指定的值,incM
 func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
     if this == nil {
@@ -273,8 +268,7 @@ func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
 	{{- end }}
 }
 {{- end }}
-
-{{- if $.IsSet}}
+{{ if $.IsSet}}
 // Set{{.StructName}} 指定的值,需要指定keys
 func (this *{{.StructName}}) Set(delta *{{.StructName}}, keys ...string) {
 	if delta == nil {
@@ -311,8 +305,7 @@ func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
     {{- end}}
 }
 {{- end }}
-
-{{- if $.IsAdd}}
+{{ if $.IsAdd}}
 // Add{{.StructName}} 指定的值,只支持数值类型
 func (this *{{.StructName}}) Add(delta *{{.StructName}}) {
 	if delta == nil {
