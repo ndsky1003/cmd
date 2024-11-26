@@ -226,9 +226,6 @@ func (this *{{.StructName}}) GenUpdateMap(keys []string) ([]bson.E, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }
-    if len(keys) == 0 {
-        return nil, errors.New("no keys provided")
-    }
 	upM := make([]bson.E, 0, len(keys))
 	for _, key := range keys {
 		switch key {
@@ -246,9 +243,6 @@ func (this *{{.StructName}}) GenUpdateMap(keys []string) ([]bson.E, error) {
 func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
-    }
-    if len(keys) == 0 {
-        return nil, errors.New("no keys provided")
     }
     {{- if .IsHashNumberKey}}
 	upM := make([]bson.E, 0, len(keys))
