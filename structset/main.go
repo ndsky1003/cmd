@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"text/template"
 
@@ -38,14 +39,31 @@ var (
 
 var fileStructData = &FileStructData{}
 
-func init() {
+func getFieldTag(field *ast.Field) string {
+	if field.Tag != nil {
+		tag := strings.Trim(field.Tag.Value, "`")
+		return tag
+	}
+	return ""
+}
+
+var tag_name = "structset"
+
+func shouldIgnoreField(tag string) bool {
+	// 根据 structset 标签判断是否忽略字段
+	structTag := reflect.StructTag(tag)
+	if structTag.Get(tag_name) == "-" {
+		return true
+	}
+	return false
 }
 
 func main() {
-	flag.String("useage", "useage", "structset -k=false -a=false -i=false --um=false -s=false --im=false --sub=ccc")
+	flag.String("useage", "useage", "structset -k=false -a=false -i=false --um=false -s=false --im=false --sub=ccc --tagname=structset")
 	flag.StringVar(&file_path, "f", "", "需要解析的文件")
 	flag.StringVar(&out_path, "o", "", "输出的新文件")
 	flag.StringVar(&suffix, "sub", "_struct_gen", "输出的新文件的后缀")
+	flag.StringVar(&tag_name, "tagname", "structset", "提取的tag名称.eg:json")
 	flag.BoolVar(&fileStructData.IsKey, "k", true, "是否生成结构体的keys常量")
 	flag.BoolVar(&fileStructData.IsUpM, "um", true, "是否生成结构体的bson.D,$set")
 	flag.BoolVar(&fileStructData.IsIncM, "im", true, "是否生成结构体的bson.D,$inc")
@@ -97,13 +115,18 @@ func main() {
 
 				var is_have_number = false
 				for _, field := range structType.Fields.List {
+					tag := getFieldTag(field)
+					if shouldIgnoreField(tag) {
+						continue
+					}
 					for _, name := range field.Names {
+						filedType := getFieldType(field.Type)
 						field := Field{
 							StructName: struct_name,
 							Name:       name.Name,
-							Type:       getFieldType(field.Type),
+							Type:       filedType,
+							IsInc:      lo.Contains(inc_type_keys, filedType),
 						}
-						field.IsInc = lo.Contains(inc_type_keys, field.Type)
 						if field.IsInc {
 							is_have_number = true
 						}
@@ -149,8 +172,9 @@ func main() {
 type Field struct {
 	StructName string //构建模版的时候无法拿到上层的东西,with不工作
 	Name       string
-	IsInc      bool
 	Type       string
+	Tag        string // 新增字段用于存储标签信息
+	IsInc      bool
 }
 
 type StructData struct {
