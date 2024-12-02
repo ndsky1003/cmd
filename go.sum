@@ -11,6 +11,8 @@ github.com/ndsky1003/crpc/v2 v2.0.9 h1:OuzholDH9KkmyLUxlyk6GLtiGQdVXotXCmZrqNXBZ
 github.com/ndsky1003/crpc/v2 v2.0.9/go.mod h1:gRr775ilmXrpZTIz9O/K07l/VYJSie4E/rlxQpCNtao=
 github.com/ndsky1003/crpc/v2 v2.0.10 h1:iGfnpHru2haO16emooR7kK1uPe5XWzWXPr9QIe55nnM=
 github.com/ndsky1003/crpc/v2 v2.0.10/go.mod h1:gRr775ilmXrpZTIz9O/K07l/VYJSie4E/rlxQpCNtao=
+github.com/ndsky1003/crpc/v2 v2.0.11 h1:stJRo6AJU9LHPoamVqo8RhAV4LbZZmr7Rbj7azdNMjA=
+github.com/ndsky1003/crpc/v2 v2.0.11/go.mod h1:gRr775ilmXrpZTIz9O/K07l/VYJSie4E/rlxQpCNtao=
 github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c h1:dAMKvw0MlJT1GshSTtih8C2gDs04w8dReiOGXrGLNoY=
 github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c/go.mod h1:RqIHx9QI14HlwKwm98g9Re5prTQ6LdeRQn+gXJFxsJM=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

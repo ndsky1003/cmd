@@ -26,12 +26,12 @@ var (
 
 var (
 	IsServer bool
-	Port     int
+	Uris     string
 )
 
 func init() {
 	flag.BoolVar(&IsServer, "isserver", false, "is server")
-	flag.IntVar(&Port, "port", 18083, "server port")
+	flag.StringVar(&Uris, "uris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
 	flag.StringVar(&Name, "name", "filemgr", "server name, regist in crpc")
 	flag.StringVar(&Urls, "urls", "127.0.0.1:18083", "crpc address,eg:127.0.0.1:18083,localhost:18083")
 	flag.StringVar(&Root, "root", ".", "root dir")
@@ -101,6 +101,17 @@ func (*msg) Mkdir(req struct{ Path string }) error {
 }
 
 func (*msg) SaveFile(req *dto.FileBody) error {
+	tmp_path := filepath.Join(Root, req.Filename)
+	if req.ChunksIndex == 0 {
+		if _, err := os.Stat(tmp_path); err == nil {
+			return fmt.Errorf("file exist:%v", tmp_path)
+		} else {
+			if !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+
 	return crpc.WriteFile(req)
 }
 
@@ -115,5 +126,7 @@ func (this *FileInfo) String() string {
 }
 
 func Server(secret string) {
-	go crpc.NewServer(crpc.OptionServer().SetSecret(secret)).Listen(fmt.Sprintf(":%v", Port))
+	fmt.Println("server secret:", secret)
+	listen_arr := strings.Split(Uris, ",")
+	go crpc.NewServer(crpc.OptionServer().SetSecret(secret)).Listens(listen_arr)
 }
