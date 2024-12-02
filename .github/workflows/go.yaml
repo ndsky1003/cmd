@@ -1,0 +1,98 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Build and Release on Tag
+on:
+    push:
+        tags:
+            - "*"
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                go-version: ["1.20"]
+                os: [linux, windows, darwin]
+                platform: [amd64, arm64]
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: ${{ matrix.go-version }}
+
+            - name: Build filemgr
+              run: |
+                  GOOS=${{ matrix.os }} GOARCH=${{ matrix.platform }} go build -v -o filemgr-${{ matrix.os }}-${{ matrix.platform }} ./cmd/filemgr
+              shell: bash
+
+            - name: Build launch
+              run: |
+                  GOOS=${{ matrix.os }} GOARCH=${{ matrix.platform }} go build -v -o launch-${{ matrix.os }}-${{ matrix.platform }} ./cmd/launch
+              shell: bash
+
+            - name: Build structset
+              run: |
+                  GOOS=${{ matrix.os }} GOARCH=${{ matrix.platform }} go build -v -o structset-${{ matrix.os }}-${{ matrix.platform }} ./cmd/structset
+              shell: bash
+
+            - name: Archive production artifacts
+              if: success()
+              uses: actions/upload-artifact@v2
+              with:
+                  name: myapps-${{ matrix.os }}-${{ matrix.platform }}
+                  path: |
+                      filemgr-${{ matrix.os }}-${{ matrix.platform }}
+                      launch-${{ matrix.os }}-${{ matrix.platform }}
+                      structset-${{ matrix.os }}-${{ matrix.platform }}
+
+    release:
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Create Release
+              id: create_release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: ${{ github.ref }}
+                  release_name: Release ${{ github.ref }}
+                  draft: false
+                  prerelease: false
+
+            - name: Upload filemgr
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: filemgr-*
+                  asset_name: filemgr-${{ matrix.os }}-${{ matrix.platform }}
+                  asset_content_type: application/octet-stream
+
+            - name: Upload launch
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: launch-*
+                  asset_name: launch-${{ matrix.os }}-${{ matrix.platform }}
+                  asset_content_type: application/octet-stream
+
+            - name: Upload structset
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: structset-*
+                  asset_name: structset-${{ matrix.os }}-${{ matrix.platform }}
+                  asset_content_type: application/octet-stream
