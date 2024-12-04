@@ -32,7 +32,7 @@ jobs:
         shell: bash
       - name: Archive production artifacts
         if: success()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: myapps-${{ matrix.os }}-${{ matrix.platform }}
           path: |
