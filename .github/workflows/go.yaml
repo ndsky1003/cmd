@@ -30,6 +30,7 @@ jobs:
       - name: Build files
         run: |
           for plat in ${{ matrix.platform }}; do
+            echo "Building for OS: ${{ matrix.os }}, ARCH: $plat"
             GOOS=${{ matrix.os }} GOARCH=$plat go build -v -o filemgr-${{ matrix.os }}-$plat ./filemgr
             GOOS=${{ matrix.os }} GOARCH=$plat go build -v -o launch-${{ matrix.os }}-$plat ./launch
             GOOS=${{ matrix.os }} GOARCH=$plat go build -v -o structset-${{ matrix.os }}-$plat ./structset
