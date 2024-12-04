@@ -18,17 +18,16 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Build filemgr
-        run: |
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.platform }} go build -v -o filemgr-${{ matrix.os }}-${{ matrix.platform }} ./cmd/filemgr
+      - name: Install dependencies
+        run: go mod tidy
         shell: bash
-      - name: Build launch
+      - name: Build files
         run: |
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.platform }} go build -v -o launch-${{ matrix.os }}-${{ matrix.platform }} ./cmd/launch
-        shell: bash
-      - name: Build structset
-        run: |
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.platform }} go build -v -o structset-${{ matrix.os }}-${{ matrix.platform }} ./cmd/structset
+          for plat in ${{ matrix.platform }}; do
+            GOOS=${{ matrix.os }} GOARCH=$plat go build -v -o filemgr-${{ matrix.os }}-$plat ./cmd/filemgr
+            GOOS=${{ matrix.os }} GOARCH=$plat go build -v -o launch-${{ matrix.os }}-$plat ./cmd/launch
+            GOOS=${{ matrix.os }} GOARCH=$plat go build -v -o structset-${{ matrix.os }}-$plat ./cmd/structset
+          done
         shell: bash
       - name: Archive production artifacts
         if: success()
