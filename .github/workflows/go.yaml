@@ -74,12 +74,11 @@ jobs:
         run: ls -lah
         shell: bash
       - name: Upload filemgr
-        uses: actions/upload-release-asset@v2
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.MY_PAT }}
         with:
-          # upload_url: ${{ steps.create_release.outputs.upload_url }}
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: filemgr-${{ matrix.os }}-${{ matrix.platform }}
           asset_name: filemgr-${{ matrix.os }}-${{ matrix.platform }}
           asset_content_type: application/octet-stream
@@ -88,8 +87,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MY_PAT }}
         with:
-          # upload_url: ${{ steps.create_release.outputs.upload_url }}
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: launch-${{ matrix.os }}-${{ matrix.platform }}
           asset_name: launch-${{ matrix.os }}-${{ matrix.platform }}
           asset_content_type: application/octet-stream
@@ -98,8 +96,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MY_PAT }}
         with:
-          # upload_url: ${{ steps.create_release.outputs.upload_url }}
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: structset-${{ matrix.os }}-${{ matrix.platform }}
           asset_name: structset-${{ matrix.os }}-${{ matrix.platform }}
           asset_content_type: application/octet-stream
