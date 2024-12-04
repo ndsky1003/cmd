@@ -55,11 +55,8 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: myapps-${{ matrix.os }}-${{ matrix.platform }}
-          path: |
-            filemgr-${{ matrix.os }}-${{ matrix.platform }}
-            launch-${{ matrix.os }}-${{ matrix.platform }}
-            structset-${{ matrix.os }}-${{ matrix.platform }}
+          name: myapps-${{ needs.build.outputs.os }}-${{ needs.build.outputs.platform }}
+          # name: myapps-${{ matrix.os }}-${{ matrix.platform }}
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
