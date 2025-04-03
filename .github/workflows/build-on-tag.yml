@@ -1,0 +1,38 @@
+name: Build Binaries on Tag
+on:
+  push:
+    tags:
+      - 'v*' # 匹配以v开头的Tag，如v1.0.0
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            GOOS: linux
+            GOARCH: amd64
+          - os: windows-latest
+            GOOS: windows
+            GOARCH: amd64
+          - os: macos-latest
+            GOOS: darwin
+            GOARCH: amd64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21' # 根据项目需求指定Go版本
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.GOOS }}
+          GOARCH: ${{ matrix.GOARCH }}
+        run: go build -o myapp-${{ matrix.GOOS }}-${{ matrix.GOARCH }} ./cmd/myapp
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: myapp-${{ matrix.GOOS }}-${{ matrix.GOARCH }}
+          path: myapp-${{ matrix.GOOS }}-${{ matrix.GOARCH }}
