@@ -51,11 +51,15 @@ var tag_name = "structset"
 
 func shouldIgnoreField(tag string) bool {
 	// 根据 structset 标签判断是否忽略字段
-	structTag := reflect.StructTag(tag)
-	if structTag.Get(tag_name) == "-" {
+	if getTagValue(tag, tag_name) == "-" {
 		return true
 	}
 	return false
+}
+
+func getTagValue(tag, tag_name string) string {
+	structTag := reflect.StructTag(tag)
+	return structTag.Get(tag_name)
 }
 
 func main() {
@@ -119,11 +123,16 @@ func main() {
 					if shouldIgnoreField(tag) {
 						continue
 					}
+					tag_value := getTagValue(tag, tag_name)
+					if tag_value == "" {
+						continue
+					}
 					for _, name := range field.Names {
 						filedType := getFieldType(field.Type)
 						field := Field{
 							StructName: struct_name,
 							Name:       name.Name,
+							TagName:    tag_value,
 							Type:       filedType,
 							IsInc:      lo.Contains(inc_type_keys, filedType),
 						}
@@ -172,6 +181,7 @@ func main() {
 type Field struct {
 	StructName string //构建模版的时候无法拿到上层的东西,with不工作
 	Name       string
+	TagName    string
 	Type       string
 	Tag        string // 新增字段用于存储标签信息
 	IsInc      bool
@@ -241,7 +251,7 @@ import (
 {{ if $.IsKey}}
 // 定义{{.StructName}} 对应字段的key
 {{- range .Fields }}
-const {{ .StructName}}_{{.Name}} = "{{ .Name}}"
+const {{ .StructName}}_{{.Name}} = "{{ .TagName}}"
 {{- end }}
 {{- end }}
 {{ if $.IsUpM}}
@@ -254,7 +264,7 @@ func (this *{{.StructName}}) GenUpdateMap(keys []string) ([]bson.E, error) {
 	for _, key := range keys {
 		switch key {
         {{- range .Fields }}
-		case "{{.Name}}":
+		case "{{.TagName}}":
 		    upM = append(upM, bson.E{Key: key, Value: this.{{.Name}}})
         {{- end }}
 		}
@@ -274,7 +284,7 @@ func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
 		switch key {
         {{- range .Fields }}
         {{- if .IsInc  }}
-		case "{{.Name}}":
+		case "{{.TagName}}":
 		    upM = append(upM, bson.E{Key: key, Value: this.{{.Name}}})
         {{- end }}
         {{- end }}
@@ -295,7 +305,7 @@ func (this *{{.StructName}}) Set(delta *{{.StructName}}, keys ...string) {
 	for _, key := range keys {
 		switch key {
         {{- range .Fields }}
-		case "{{.Name}}":
+		case "{{.TagName}}":
 			this.{{.Name}} = delta.{{.Name}}
          {{- end }}
 		}
@@ -314,7 +324,7 @@ func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
 		switch key {
         {{- range .Fields }}
         {{- if .IsInc  }}
-		case "{{.Name}}":
+		case "{{.TagName}}":
 			this.{{.Name}} += delta.{{.Name}}
         {{- end }}
         {{- end }}
