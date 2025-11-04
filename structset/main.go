@@ -124,11 +124,17 @@ func main() {
 						continue
 					}
 					tag_value := getTagValue(tag, tag_name)
-					if tag_value == "" {
-						continue
+					if idx := strings.Index(tag_value, ","); idx != -1 {
+						tag_value = tag_value[:idx] // 只保留第一个逗号前的部分
 					}
+					// if tag_value == "" {
+					// 	continue
+					// }
 					for _, name := range field.Names {
 						filedType := getFieldType(field.Type)
+						if tag_value == "" {
+							tag_value = name.Name // 默认使用字段名作为标签值
+						}
 						field := Field{
 							StructName: struct_name,
 							Name:       name.Name,
