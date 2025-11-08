@@ -1,0 +1,133 @@
+package {{.PackageName}}
+
+import (
+	"errors"
+{{ if or $.IsUpM $.IsIncM $.IsJsonM }}
+	"go.mongodb.org/mongo-driver/bson"
+{{- end }}
+)
+{{- range .StructDatas}}
+{{ if $.IsKey}}
+// 定义{{.StructName}} 对应字段的key
+{{- range .Fields }}
+const {{ .StructName}}_{{.Name }} = "{{ .TagValue }}"
+{{- end }}
+{{- end }}
+{{ if $.IsJsonM}}
+// Set{{.StructName}} 指定的值,upM
+func (this *{{.StructName}}) GenJsonM(keys []string) (bson.M, error) {
+    if this == nil {
+        return nil, errors.New("receiver is nil")
+    }
+	json_M := bson.M{}
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if ne .JsonTagValue "-" }}
+		case "{{.TagValue}}":
+		    json_M["{{.JsonTagValue}}"] = this.{{.Name}}
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return json_M, nil
+}
+{{- end }}
+{{ if $.IsUpM}}
+// Set{{.StructName}} 指定的值,upM
+func (this *{{.StructName}}) GenUpM(keys []string) ([]bson.E, error) {
+    if this == nil {
+        return nil, errors.New("receiver is nil")
+    }
+	upM := make([]bson.E, 0, len(keys))
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if ne .BsonTagValue "-" }}
+		case "{{.TagValue}}":
+           upM = append(upM, bson.E{Key: "{{ .BsonTagValue }}", Value: this.{{.Name}}})
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return upM, nil
+}
+{{- end }}
+{{ if $.IsIncM}}
+// Set{{.StructName}} 指定的值,incM
+func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
+    if this == nil {
+        return nil, errors.New("receiver is nil")
+    }
+    {{- if .IsHashNumberKey}}
+	upM := make([]bson.E, 0, len(keys))
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if and .IsInc (ne .BsonTagValue "-") }}
+		case "{{.TagValue}}":
+		    upM = append(upM, bson.E{Key: "{{ .BsonTagValue }}", Value: this.{{.Name}}})
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return upM, nil
+    {{- else}}
+	return nil, errors.New("key is not has number")
+	{{- end }}
+}
+{{- end }}
+{{ if $.IsSet}}
+// Set{{.StructName}} 指定的值,需要指定keys
+func (this *{{.StructName}}) Set(delta *{{.StructName}}, keys ...string) {
+	if delta == nil {
+		return
+	}
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+		case "{{.TagValue}}":
+			this.{{.Name}} = delta.{{.Name}}
+         {{- end }}
+		}
+	}
+}
+{{- end }}
+
+{{- if $.IsInc}}
+// Inc{{.StructName}} 指定的值,需要指定keys
+func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
+	if delta == nil {
+		return
+	}
+    {{- if .IsHashNumberKey}}
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if .IsInc  }}
+		case "{{.TagValue}}":
+			this.{{.Name}} += delta.{{.Name}}
+        {{- end }}
+        {{- end }}
+		}
+	}
+    {{- end}}
+}
+{{- end }}
+{{ if $.IsAdd}}
+// Add{{.StructName}} 指定的值,只支持数值类型
+func (this *{{.StructName}}) Add(delta *{{.StructName}}) {
+	if delta == nil {
+		return
+	}
+    {{- if .IsHashNumberKey}}
+    {{- range .Fields }}
+    {{- if .IsInc  }}
+	this.{{.Name}} += delta.{{.Name}}
+    {{- end }}
+    {{- end }}
+    {{- end}}
+}
+{{- end }}
+
+{{- end }}

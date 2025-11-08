@@ -2,6 +2,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -52,19 +53,29 @@ var tag_name = "structset"
 
 func shouldIgnoreField(tag string) bool {
 	// 根据 structset 标签判断是否忽略字段
-	if getTagValue(tag, tag_name) == "-" {
+	tag_value, _ := getTagValue(tag, tag_name)
+	if tag_value == "-" {
 		return true
 	}
 	return false
 }
 
-func getTagValue(tag, tag_name string) (tag_name_value string) {
+func getTagValue(tag, tag_name string) (tag_value string, qualifier []string) {
 	structTag := reflect.StructTag(tag)
-	tag_name_value = structTag.Get(tag_name)
-	if idx := strings.Index(tag_name_value, ","); idx != -1 {
-		tag_name_value = tag_name_value[:idx] // 只保留第一个逗号前的部分
+	tag_value = structTag.Get(tag_name)
+	tag_values := strings.Split(tag_value, ",")
+	tag_value, is := lo.First(tag_values)
+	if is {
+		qualifier = tag_values[1:]
 	}
 	return
+}
+
+func fix_default_tag_value(tag_value, default_value string) string {
+	if tag_value == "" {
+		tag_value = default_value
+	}
+	return tag_value
 }
 
 // 格式化 Go 文件
@@ -80,7 +91,7 @@ func main() {
 	flag.StringVar(&suffix, "sub", "_struct_gen", "输出的新文件的后缀")
 	flag.StringVar(&tag_name, "tagname", "structset", "提取的tag名称.eg:json")
 	flag.BoolVar(&fileStructData.IsKey, "k", true, "是否生成结构体的keys常量")
-	flag.BoolVar(&fileStructData.IsJsonM, "jum", true, "是否生成结构体的bson.M")
+	flag.BoolVar(&fileStructData.IsJsonM, "jm", true, "是否生成结构体的bson.M")
 	flag.BoolVar(&fileStructData.IsUpM, "um", true, "是否生成结构体的bson.D,$set")
 	flag.BoolVar(&fileStructData.IsIncM, "im", true, "是否生成结构体的bson.D,$inc")
 	flag.BoolVar(&fileStructData.IsSet, "s", true, "是否生成结构体的Set(detal *StructData,keys []string)")
@@ -135,8 +146,9 @@ func main() {
 					if shouldIgnoreField(tag) {
 						continue
 					}
-					tag_name_value := getTagValue(tag, tag_name)
-					json_tag_name_value := getTagValue(tag, "json")
+					tag_value, _ := getTagValue(tag, tag_name)
+					json_tag_value, _ := getTagValue(tag, "json")
+					bson_tag_value, _ := getTagValue(tag, "bson")
 					// if idx := strings.Index(tag_name_value, ","); idx != -1 {
 					// 	tag_name_value = tag_name_value[:idx] // 只保留第一个逗号前的部分
 					// }
@@ -145,19 +157,21 @@ func main() {
 					// }
 					for _, name := range field.Names {
 						filedType := getFieldType(field.Type)
-						if tag_name_value == "" {
-							tag_name_value = name.Name // 默认使用字段名作为标签值
+						if tag_value == "" {
+							tag_value = name.Name // 默认使用字段名作为标签值
 						}
-						if json_tag_name_value == "" {
-							json_tag_name_value = name.Name // 默认使用字段名作为标签值
+						if json_tag_value == "" {
+							json_tag_value = name.Name // 默认使用字段名作为标签值
 						}
+						Name := name.Name
 						field := Field{
-							StructName:  struct_name,
-							Name:        name.Name,
-							TagName:     tag_name_value,
-							JsonTagName: json_tag_name_value,
-							Type:        filedType,
-							IsInc:       lo.Contains(inc_type_keys, filedType),
+							StructName:   struct_name,
+							Name:         Name,
+							TagValue:     fix_default_tag_value(tag_value, Name),
+							JsonTagValue: fix_default_tag_value(json_tag_value, Name),
+							BsonTagValue: fix_default_tag_value(bson_tag_value, Name),
+							Type:         filedType,
+							IsInc:        lo.Contains(inc_type_keys, filedType),
 						}
 						if field.IsInc {
 							is_have_number = true
@@ -206,13 +220,14 @@ func main() {
 }
 
 type Field struct {
-	StructName  string //构建模版的时候无法拿到上层的东西,with不工作
-	Name        string //结构体的字段名
-	TagName     string //结构体的标签名：默认是structset
-	JsonTagName string //结构体的标签名：json
-	Type        string
-	Tag         string // 新增字段用于存储标签信息
-	IsInc       bool
+	StructName   string //构建模版的时候无法拿到上层的东西,with不工作
+	Name         string //结构体的字段名
+	TagValue     string //结构体的标签名：默认是structset
+	JsonTagValue string //结构体的标签名：json
+	BsonTagValue string //结构体的标签名：bson
+	Type         string
+	Tag          string // 新增字段用于存储标签信息
+	IsInc        bool
 }
 
 type StructData struct {
@@ -268,133 +283,5 @@ func getFieldType(expr ast.Expr) string {
 	}
 }
 
-const tmpl = `package {{.PackageName}}
-
-import (
-	"errors"
-{{ if or $.IsUpM $.IsIncM}}
-	"go.mongodb.org/mongo-driver/bson"
-{{- end }}
-)
-{{- range .StructDatas}}
-{{ if $.IsKey}}
-// 定义{{.StructName}} 对应字段的key
-{{- range .Fields }}
-const {{ .StructName}}_{{.Name}} = "{{ .TagName}}"
-{{- end }}
-{{- end }}
-{{ if $.IsJsonM}}
-// Set{{.StructName}} 指定的值,upM
-func (this *{{.StructName}}) GenJsonM(keys []string) (bson.M, error) {
-    if this == nil {
-        return nil, errors.New("receiver is nil")
-    }
-	json_M := bson.M{}
-	for _, key := range keys {
-		switch key {
-        {{- range .Fields }}
-		case "{{.TagName}}":
-		    json_M["{{.JsonTagName}}"] = this.{{.Name}}
-        {{- end }}
-		}
-	}
-    return json_M, nil
-}
-{{- end }}
-{{ if $.IsUpM}}
-// Set{{.StructName}} 指定的值,upM
-func (this *{{.StructName}}) GenUpdateMap(keys []string) ([]bson.E, error) {
-    if this == nil {
-        return nil, errors.New("receiver is nil")
-    }
-	upM := make([]bson.E, 0, len(keys))
-	for _, key := range keys {
-		switch key {
-        {{- range .Fields }}
-		case "{{.TagName}}":
-		    upM = append(upM, bson.E{Key: key, Value: this.{{.Name}}})
-        {{- end }}
-		}
-	}
-    return upM, nil
-}
-{{- end }}
-{{ if $.IsIncM}}
-// Set{{.StructName}} 指定的值,incM
-func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
-    if this == nil {
-        return nil, errors.New("receiver is nil")
-    }
-    {{- if .IsHashNumberKey}}
-	upM := make([]bson.E, 0, len(keys))
-	for _, key := range keys {
-		switch key {
-        {{- range .Fields }}
-        {{- if .IsInc  }}
-		case "{{.TagName}}":
-		    upM = append(upM, bson.E{Key: key, Value: this.{{.Name}}})
-        {{- end }}
-        {{- end }}
-		}
-	}
-    return upM, nil
-    {{- else}}
-	return nil, errors.New("key is not has number")
-	{{- end }}
-}
-{{- end }}
-{{ if $.IsSet}}
-// Set{{.StructName}} 指定的值,需要指定keys
-func (this *{{.StructName}}) Set(delta *{{.StructName}}, keys ...string) {
-	if delta == nil {
-		return
-	}
-	for _, key := range keys {
-		switch key {
-        {{- range .Fields }}
-		case "{{.TagName}}":
-			this.{{.Name}} = delta.{{.Name}}
-         {{- end }}
-		}
-	}
-}
-{{- end }}
-
-{{- if $.IsInc}}
-// Inc{{.StructName}} 指定的值,需要指定keys
-func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
-	if delta == nil {
-		return
-	}
-    {{- if .IsHashNumberKey}}
-	for _, key := range keys {
-		switch key {
-        {{- range .Fields }}
-        {{- if .IsInc  }}
-		case "{{.TagName}}":
-			this.{{.Name}} += delta.{{.Name}}
-        {{- end }}
-        {{- end }}
-		}
-	}
-    {{- end}}
-}
-{{- end }}
-{{ if $.IsAdd}}
-// Add{{.StructName}} 指定的值,只支持数值类型
-func (this *{{.StructName}}) Add(delta *{{.StructName}}) {
-	if delta == nil {
-		return
-	}
-    {{- if .IsHashNumberKey}}
-    {{- range .Fields }}
-    {{- if .IsInc  }}
-	this.{{.Name}} += delta.{{.Name}}
-    {{- end }}
-    {{- end }}
-    {{- end}}
-}
-{{- end }}
-
-{{- end }}
-`
+//go:embed struct_template.go.tmpl
+var tmpl string
