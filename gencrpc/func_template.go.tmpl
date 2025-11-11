@@ -1,0 +1,25 @@
+package {{.PackageName}}
+import (
+{{- range $key,$value := .Importor_need }}
+{{- if $value.IsIndent }}
+    {{ $value.Name }} "{{ $value.Path }}"
+{{- else }}
+    "{{ $value.Path }}"
+{{- end }}
+{{- end }}
+{{- range $index,$value := .Importor_extra }}
+{{- if $value.IsIndent }}
+    {{ $value.Name }} "{{ $value.Path }}"
+{{- else }}
+    "{{ $value.Path }}"
+{{- end }}
+{{- end }}
+)
+
+
+{{- range .Funcs }}
+func {{.NameFunc}}({{range $index, $param := .In}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{if .Out}}({{range $index, $return := .Out}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{end}} {
+err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", req, ret, opts...)
+return
+}
+{{- end }}
