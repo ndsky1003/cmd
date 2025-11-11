@@ -19,7 +19,14 @@ import (
 
 {{- range .Funcs }}
 func {{.NameFunc}}({{range $index, $param := .In}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{if .Out}}({{range $index, $return := .Out}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{end}} {
-err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", req, ret, opts...)
+{{- if .Out }}
+{{- range $index, $return := .Out}}
+{{- if .Type_is_pointer }}
+{{.Name}} = new({{.Type_elem}})
+{{- end}}
+{{- end}}
+{{- end}}
+err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", {{.ReqArg}}, ret, opts...)
 return
 }
 {{- end }}

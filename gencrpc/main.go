@@ -87,11 +87,6 @@ func main() {
 		return true
 	})
 	data.FixImportorNeedList()
-	//TODO:
-	// fmt.Println("need importor:", data.Importor_need)
-	// return
-
-	// tmpl, err := template.ParseFiles("struct_template.go.tmpl")
 	tmpl, err := template.New("tmpl").Parse(tmpl)
 	if err != nil {
 		panic(err)
@@ -210,14 +205,15 @@ type func_decl struct {
 	Server             string
 	Module             string
 	ReqAppend          string
+	ReqArg             string //第一个参数名
 }
 
 type func_param_in_or_out struct {
-	Name             string
-	ImportPre        string
-	Type             string
-	Type_is_pointer  bool   //不是指针类型的，用作生成代码时声明
-	Type_not_pointer string //不是指针类型的，用作生成代码时声明
+	Name            string
+	ImportPre       string
+	Type            string
+	Type_is_pointer bool   //不是指针类型的，用作生成代码时声明
+	Type_elem       string //不是指针类型的，用作生成代码时声明
 }
 
 func (this *func_param_in_or_out) fixFullTypeName() {
@@ -229,14 +225,14 @@ func (this *func_param_in_or_out) fixFullTypeName() {
 		this.ImportPre = parts[0]
 	}
 	this.Type_is_pointer = strings.HasPrefix(this.Type, "*")
-	this.Type_not_pointer = strings.TrimPrefix(this.Type, "*")
+	this.Type_elem = strings.TrimPrefix(this.Type, "*")
 }
 
 func (this *func_param_in_or_out) String() string {
 	return fmt.Sprintf("Name:%s,import_pre:%s,Type:%s", this.Name, this.ImportPre, this.Type)
 }
 
-var get_comment_key_value_reg = regexp.MustCompile(`^//\s*@crpc:\s*([^\s]+):\s*([^\s]+\s+[^\s]+)\s*$`)
+var get_comment_key_value_reg = regexp.MustCompile(`^//\s*@crpc:\s*([^\s]+):\s*([\.\w\s,]*)`)
 var get_comment_content_reg = regexp.MustCompile(`^//\s*@crpc_content:\s*([^\s]+)\s*$`)
 var get_req_arg_type_reg = regexp.MustCompile(`^([^\s]+)\s+([^\s]+)$`)
 
@@ -248,11 +244,7 @@ func get_req_arg_type(str string) (arg, type_str string, ok bool) {
 	return "", "", false
 }
 
-// TODO:暂不支持多个参数，这个是问题
 func get_comment_key_value(comment string) (string, string, bool) {
-	// 定义正则表达式
-
-	// 查找所有匹配内容
 	matches := get_comment_key_value_reg.FindStringSubmatch(comment)
 	if len(matches) == 3 {
 		return matches[1], matches[2], true
@@ -365,8 +357,13 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 			if res_type == "error" {
 				name = "err"
 			} else {
-				name = fmt.Sprintf("ret%d", index)
+				if index == 0 {
+					name = "ret"
+				} else {
+					name = fmt.Sprintf("ret%d", index)
+				}
 			}
+			fmt.Println("param.Type:", name, "type:", res_type, "init_type:", getInitialization(result.Type))
 
 			v := &func_param_in_or_out{
 				Name: name,
@@ -382,6 +379,7 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 		param_index := 0
 		for _, param := range funcSpec.Type.Params.List {
 			for _, name := range param.Names {
+				//skip meta.Admin meta.Msg
 				if param_length == 2 && param_index == 0 {
 					param_index++
 					continue
@@ -389,6 +387,9 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 				v := &func_param_in_or_out{
 					Name: name.Name,
 					Type: getFieldType(param.Type),
+				}
+				if res.ReqArg == "" {
+					res.ReqArg = name.Name
 				}
 				v.fixFullTypeName()
 				res.In = append(res.In, v)
@@ -400,6 +401,7 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 	if req_append := res.ReqAppend; req_append != "" {
 		parts := strings.Split(req_append, ",")
 		for _, part := range parts {
+			part = strings.TrimSpace(part)
 			if arg, type_str, ok := get_req_arg_type(part); ok {
 				v := &func_param_in_or_out{
 					Name: arg,
@@ -428,6 +430,24 @@ func getFieldType(expr ast.Expr) string {
 		return fmt.Sprintf("*%s", getFieldType(t.X))
 	default:
 		return fmt.Sprintf("%T", expr) // 其他类型
+	}
+}
+
+// 获取初始化方式
+func getInitialization(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident: // 基本类型或自定义类型
+		return fmt.Sprintf("%s{}", t.Name) // 假设使用字面量初始化
+	case *ast.ArrayType: // 数组类型
+		return fmt.Sprintf("{}") // 使用字面量初始化
+	case *ast.StructType: // 数组类型
+		return fmt.Sprintf("{}") // 使用字面量初始化
+	case *ast.MapType: // map 类型
+		return fmt.Sprintf("make(map[%s]%s)", getFieldType(t.Key), getFieldType(t.Value))
+	case *ast.StarExpr: // 指针类型
+		return fmt.Sprintf("new(%s)", getFieldType(t.X)) // 使用new初始化
+	default:
+		return fmt.Sprintf("var %s", getFieldType(expr)) // 默认声明
 	}
 }
 
