@@ -22,16 +22,20 @@ import (
 {{ $value }}
 {{- end }}
 func {{.NameFunc}}({{range $index, $param := .In}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{if .Out}}({{range $index, $return := .Out}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{end}} {
+{{- if .Content}}
+{{- range $index, $line := .Content}}
+{{ $line }}
+{{- end}}
+{{- else}}
 {{- if .Out }}
 {{- range $index, $return := .Out}}
-{{- if .Type_is_pointer }}
-{{.Name}} = new({{.Type_elem}})
-{{- else }}
-var {{.Name}} {{.Type}}
+{{- if .Type_elem_init }}
+{{ .Type_elem_init}}
 {{- end}}
 {{- end}}
 {{- end}}
-err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", {{.CallReqName}}, {{.CallRetName}}, opts...)
+err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", {{.CallReqName}}, {{.CallRetName}}, {{.CallOptionName}})
+{{- end}}
 return
 }
 {{- end }}
