@@ -13,7 +13,20 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"github.com/samber/lo"
 )
+
+const VERSION = "v1.0.0"
+
+const Anotaion_IsNotGen = "IsNotGen" //跳过这个方法自动生成
+const Anotaion_Func = "Func"
+const Anotaion_Client = "Client"
+const Anotaion_Server = "Server"
+const Anotaion_Module = "Module"
+const Anotaion_ReqAppend = "ReqAppend"
+const Anotaion_Content = "Content"
+const Anotaion_Option = "Option"
 
 var (
 	file_path string
@@ -34,10 +47,11 @@ func main() {
 	flag.StringVar(&out_path, "o", "", "输出的新文件")
 	flag.StringVar(&suffix, "sub", "_crpc_gen", "输出的新文件的后缀")
 	flag.StringVar(&imports, "import", "", "额外需要导入的包，多个包用逗号分隔,别名用冒号分开。eg: --import=jj:encoding/json,tt:time")
-	flag.StringVar(&data.ReqAppend, "req_append", "", "额外参数，多个参数用逗号分隔,别名用冒号分开。eg: --append_req=tt:time,opts:...crpc.Option")
+	flag.StringVar(&data.PackageName, "packagename", "main", "生成代码时使用的包名")
 	flag.StringVar(&data.Client, "client", "crpc_client", "生成客户端代码时使用的变量名")
 	flag.StringVar(&data.Server, "server", "crpc_server_name", "调用哪个服务")
 	flag.StringVar(&data.Module, "module", "crpc", "生成代码时使用的模块名")
+	flag.StringVar(&data.ReqAppend, "req_append", "", "额外参数，多个参数用逗号分隔,别名用冒号分开。eg: --append_req=tt:time,opts:...crpc.Option")
 	flag.Parse()
 	if file_path == "" {
 		dir, err := os.Getwd()
@@ -69,7 +83,9 @@ func main() {
 	}
 
 	// 获取包名
-	data.PackageName = node.Name.Name
+	if data.PackageName == "" {
+		data.PackageName = node.Name.Name
+	}
 
 	// 遍历 AST
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -80,7 +96,6 @@ func main() {
 			}
 		case *ast.FuncDecl:
 			if func_desc := handleFuncDecl(n); func_desc != nil {
-				// fmt.Println("func_desc:", func_desc)
 				data.Funcs = append(data.Funcs, func_desc)
 			}
 		}
@@ -123,10 +138,10 @@ type Data struct {
 	Importor_need  map[string]*import_value
 	Importor_extra []*import_value
 	PackageName    string
-	ReqAppend      string
 	Client         string
 	Server         string
 	Module         string
+	ReqAppend      string
 	Funcs          []*func_decl
 }
 
@@ -193,19 +208,39 @@ func handleImportSpec(importSpec *ast.ImportSpec) *import_value {
 	}
 }
 
+type anotations []string
+
+func (a anotations) append(s string) anotations {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return a
+	}
+	return append(a, s)
+}
+func (a anotations) fist() (string, bool) {
+	if len(a) == 0 {
+		return "", false
+	}
+	return a[0], true
+}
+
 type func_decl struct {
-	Name               string            //函数名
-	NameFunc           string            //函数名，可以被覆盖
-	Receiver           string            //接收者类型
-	Comments_anotation map[string]string //注解
-	Comments_content   []string          //直接替换函数内容
+	Name               string                //函数名
+	NameFunc           string                //函数名，可以被覆盖
+	Receiver           string                //接收者类型
+	Comments_anotation map[string]anotations //注解
+	Comments           anotations            //注解
 	In                 []*func_param_in_or_out
 	Out                []*func_param_in_or_out
 	Client             string
 	Server             string
 	Module             string
 	ReqAppend          string
-	ReqArg             string //第一个参数名
+	Option             anotations
+	ReqFirst           *func_param_in_or_out //第一个参数名
+	RetFirst           *func_param_in_or_out //第一个返回值名
+	CallReqName        string                //请求参数变量名
+	CallRetName        string                //返回值变量名
 }
 
 type func_param_in_or_out struct {
@@ -214,6 +249,24 @@ type func_param_in_or_out struct {
 	Type            string
 	Type_is_pointer bool   //不是指针类型的，用作生成代码时声明
 	Type_elem       string //不是指针类型的，用作生成代码时声明
+	Type_init       string //default "" {} ,非指针类型的怎么初始化 空串直接声明，{}是map，[]的初始化， 指针类型一律用这个类型初始化出来，然后取地址
+}
+
+var basicTypes = []string{
+	"int",
+	"int8",
+	"int16",
+	"int32",
+	"int64",
+	"uint",
+	"uint8",
+	"uint16",
+	"uint32",
+	"uint64",
+	"float32",
+	"float64",
+	"bool",
+	"string",
 }
 
 func (this *func_param_in_or_out) fixFullTypeName() {
@@ -226,14 +279,17 @@ func (this *func_param_in_or_out) fixFullTypeName() {
 	}
 	this.Type_is_pointer = strings.HasPrefix(this.Type, "*")
 	this.Type_elem = strings.TrimPrefix(this.Type, "*")
+	if !lo.Contains(basicTypes, this.Type_elem) {
+		this.Type_init = "{}"
+	}
+
 }
 
 func (this *func_param_in_or_out) String() string {
 	return fmt.Sprintf("Name:%s,import_pre:%s,Type:%s", this.Name, this.ImportPre, this.Type)
 }
 
-var get_comment_key_value_reg = regexp.MustCompile(`^//\s*@crpc:\s*([^\s]+):\s*([\.\w\s,]*)`)
-var get_comment_content_reg = regexp.MustCompile(`^//\s*@crpc_content:\s*([^\s]+)\s*$`)
+var get_comment_key_value_reg = regexp.MustCompile(`^//\s*@crpc:\s*([^\s]+):\s*(.*)`)
 var get_req_arg_type_reg = regexp.MustCompile(`^([^\s]+)\s+([^\s]+)$`)
 
 func get_req_arg_type(str string) (arg, type_str string, ok bool) {
@@ -244,19 +300,12 @@ func get_req_arg_type(str string) (arg, type_str string, ok bool) {
 	return "", "", false
 }
 
-func get_comment_key_value(comment string) (string, string, bool) {
+func get_comment_anotation_key_value(comment string) (string, string, bool) {
 	matches := get_comment_key_value_reg.FindStringSubmatch(comment)
 	if len(matches) == 3 {
 		return matches[1], matches[2], true
 	}
 	return "", "", false
-}
-func get_comment_content(comment string) (string, bool) {
-	matches := get_comment_content_reg.FindStringSubmatch(comment)
-	if len(matches) == 2 {
-		return matches[1], true
-	}
-	return "", false
 }
 
 func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
@@ -265,13 +314,13 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 		return
 	}
 
-	var param_length int
+	var req_length int
 	for _, param := range funcSpec.Type.Params.List {
 		for range param.Names {
-			param_length++
+			req_length++
 		}
 	}
-	if param_length > 2 || param_length < 1 {
+	if req_length > 2 || req_length < 1 {
 		return
 	}
 	if funcSpec.Type.Results == nil {
@@ -300,46 +349,25 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 
 	res = &func_decl{
 		Name:               funcSpec.Name.Name,
-		Comments_anotation: map[string]string{},
-		Comments_content:   []string{},
+		Comments_anotation: map[string]anotations{},
 	}
 	// 打印函数的注释
 	if funcSpec.Doc != nil {
 		for _, comment := range funcSpec.Doc.List {
-			if key, value, ok := get_comment_key_value(comment.Text); ok {
-				res.Comments_anotation[key] = value
-			}
-			if content, ok := get_comment_content(comment.Text); ok {
-				res.Comments_content = append(res.Comments_content, content)
+			if key, value, ok := get_comment_anotation_key_value(comment.Text); ok {
+				res.Comments_anotation[key] = res.Comments_anotation[key].append(value)
+			} else {
+				res.Comments = res.Comments.append(comment.Text)
 			}
 		}
 	}
 
-	if v, ok := res.Comments_anotation["NameFunc"]; ok {
-		res.NameFunc = v
-	} else {
-		res.NameFunc = funcSpec.Name.Name
-	}
-	if v, ok := res.Comments_anotation["Client"]; ok {
-		res.Client = v
-	} else {
-		res.Client = data.Client
-	}
-	if v, ok := res.Comments_anotation["Server"]; ok {
-		res.Server = v
-	} else {
-		res.Server = data.Server
-	}
-	if v, ok := res.Comments_anotation["Module"]; ok {
-		res.Module = v
-	} else {
-		res.Module = data.Module
-	}
-	if v, ok := res.Comments_anotation["ReqAppend"]; ok {
-		res.ReqAppend = v
-	} else {
-		res.ReqAppend = data.ReqAppend
-	}
+	res.NameFunc, _ = res.Comments_anotation[Anotaion_Func].append(res.Name).fist()
+	res.Client, _ = res.Comments_anotation[Anotaion_Client].append(data.Client).fist()
+	res.Server, _ = res.Comments_anotation[Anotaion_Server].append(data.Server).fist()
+	res.Module, _ = res.Comments_anotation[Anotaion_Module].append(data.Module).fist()
+	res.ReqAppend, _ = res.Comments_anotation[Anotaion_ReqAppend].append(data.ReqAppend).fist()
+	res.Option = res.Comments_anotation[Anotaion_Option]
 	// 获取返回值信息
 	for index, result := range funcSpec.Type.Results.List {
 		res_type := getFieldType(result.Type)
@@ -363,14 +391,24 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 					name = fmt.Sprintf("ret%d", index)
 				}
 			}
-			fmt.Println("param.Type:", name, "type:", res_type, "init_type:", getInitialization(result.Type))
-
 			v := &func_param_in_or_out{
 				Name: name,
 				Type: res_type,
 			}
 			v.fixFullTypeName()
 			res.Out = append(res.Out, v)
+		}
+	}
+	if res_length > 1 {
+		res.RetFirst = res.Out[0]
+	}
+	if res.RetFirst == nil {
+		res.CallRetName = "nil"
+	} else {
+		if !res.RetFirst.Type_is_pointer {
+			res.CallRetName = "&" + res.RetFirst.Name
+		} else {
+			res.CallRetName = res.RetFirst.Name
 		}
 	}
 
@@ -380,16 +418,13 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 		for _, param := range funcSpec.Type.Params.List {
 			for _, name := range param.Names {
 				//skip meta.Admin meta.Msg
-				if param_length == 2 && param_index == 0 {
+				if req_length == 2 && param_index == 0 {
 					param_index++
 					continue
 				}
 				v := &func_param_in_or_out{
 					Name: name.Name,
 					Type: getFieldType(param.Type),
-				}
-				if res.ReqArg == "" {
-					res.ReqArg = name.Name
 				}
 				v.fixFullTypeName()
 				res.In = append(res.In, v)
@@ -412,6 +447,13 @@ func handleFuncDecl(funcSpec *ast.FuncDecl) (res *func_decl) {
 			}
 		}
 	}
+	if len(res.In) >= 1 {
+		res.ReqFirst = res.In[0]
+		res.CallReqName = res.ReqFirst.Name
+	}
+	if res.ReqFirst == nil {
+		res.CallReqName = "nil"
+	}
 	return
 }
 
@@ -430,24 +472,6 @@ func getFieldType(expr ast.Expr) string {
 		return fmt.Sprintf("*%s", getFieldType(t.X))
 	default:
 		return fmt.Sprintf("%T", expr) // 其他类型
-	}
-}
-
-// 获取初始化方式
-func getInitialization(expr ast.Expr) string {
-	switch t := expr.(type) {
-	case *ast.Ident: // 基本类型或自定义类型
-		return fmt.Sprintf("%s{}", t.Name) // 假设使用字面量初始化
-	case *ast.ArrayType: // 数组类型
-		return fmt.Sprintf("{}") // 使用字面量初始化
-	case *ast.StructType: // 数组类型
-		return fmt.Sprintf("{}") // 使用字面量初始化
-	case *ast.MapType: // map 类型
-		return fmt.Sprintf("make(map[%s]%s)", getFieldType(t.Key), getFieldType(t.Value))
-	case *ast.StarExpr: // 指针类型
-		return fmt.Sprintf("new(%s)", getFieldType(t.X)) // 使用new初始化
-	default:
-		return fmt.Sprintf("var %s", getFieldType(expr)) // 默认声明
 	}
 }
 

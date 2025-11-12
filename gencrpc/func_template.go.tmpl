@@ -18,15 +18,20 @@ import (
 
 
 {{- range .Funcs }}
+{{- range $index,$value := .Comments}}
+{{ $value }}
+{{- end }}
 func {{.NameFunc}}({{range $index, $param := .In}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{if .Out}}({{range $index, $return := .Out}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}){{end}} {
 {{- if .Out }}
 {{- range $index, $return := .Out}}
 {{- if .Type_is_pointer }}
 {{.Name}} = new({{.Type_elem}})
+{{- else }}
+var {{.Name}} {{.Type}}
 {{- end}}
 {{- end}}
 {{- end}}
-err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", {{.ReqArg}}, ret, opts...)
+err =  {{.Client}}.Call({{.Server}}, "{{.Module}}.{{.Name}}", {{.CallReqName}}, {{.CallRetName}}, opts...)
 return
 }
 {{- end }}
