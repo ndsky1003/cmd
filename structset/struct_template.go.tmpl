@@ -2,7 +2,7 @@ package {{.PackageName}}
 
 import (
 	"errors"
-{{ if or $.IsUpM $.IsIncM $.IsJsonM }}
+{{ if or $.IsBsonM $.IsIncM $.IsJsonM $.IsBsonD $.IsIncD }}
 	"go.mongodb.org/mongo-driver/bson"
 {{- end }}
 )
@@ -12,6 +12,14 @@ import (
 {{- range .Fields }}
 const {{ .StructName}}_{{.Name }} = "{{ .TagValue }}"
 {{- end }}
+var (
+    // {{.StructName}}_All_Keys 定义{{.StructName}} 所有字段的key
+    {{.StructName}}_All_Keys = []string{
+    {{- range .Fields }}
+        {{ .StructName}}_{{.Name }},
+    {{- end }}
+    }
+)
 {{- end }}
 {{ if $.IsJsonM}}
 // Set{{.StructName}} 指定的值,upM
@@ -33,45 +41,90 @@ func (this *{{.StructName}}) GenJsonM(keys []string) (bson.M, error) {
     return json_M, nil
 }
 {{- end }}
-{{ if $.IsUpM}}
-// Set{{.StructName}} 指定的值,upM
-func (this *{{.StructName}}) GenUpM(keys []string) ([]bson.E, error) {
+{{ if $.IsBsonM}}
+// Set{{.StructName}} 指定的值,bson.M
+func (this *{{.StructName}}) GenBsonM(keys []string) (bson.M, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }
-	upM := make([]bson.E, 0, len(keys))
+	bm := make(bson.M, len(keys))
 	for _, key := range keys {
 		switch key {
         {{- range .Fields }}
         {{- if ne .BsonTagValue "-" }}
 		case "{{.TagValue}}":
-           upM = append(upM, bson.E{Key: "{{ .BsonTagValue }}", Value: this.{{.Name}}})
+		   bm["{{.BsonTagValue}}"] = this.{{.Name}}
         {{- end }}
         {{- end }}
 		}
 	}
-    return upM, nil
+    return bm, nil
 }
 {{- end }}
 {{ if $.IsIncM}}
 // Set{{.StructName}} 指定的值,incM
-func (this *{{.StructName}}) GenIncM(keys []string) ([]bson.E, error) {
+func (this *{{.StructName}}) GenIncM(keys []string) (bson.M, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }
-    {{- if .IsHashNumberKey}}
-	upM := make([]bson.E, 0, len(keys))
+    {{- if .IsHaveIncKey}}
+	bm := make(bson.M, len(keys))
 	for _, key := range keys {
 		switch key {
         {{- range .Fields }}
         {{- if and .IsInc (ne .BsonTagValue "-") }}
 		case "{{.TagValue}}":
-		    upM = append(upM, bson.E{Key: "{{ .BsonTagValue }}", Value: this.{{.Name}}})
+		   bm["{{.BsonTagValue}}"] = this.{{.Name}}
         {{- end }}
         {{- end }}
 		}
 	}
-    return upM, nil
+    return bm, nil
+    {{- else}}
+	return nil, errors.New("key is not has number")
+	{{- end }}
+}
+{{- end }}
+
+{{ if $.IsBsonD}}
+// Set{{.StructName}} 指定的值,bson.D
+func (this *{{.StructName}}) GenBsonD(keys []string) (bson.D, error) {
+    if this == nil {
+        return nil, errors.New("receiver is nil")
+    }
+	bd := make([]bson.E, 0, len(keys))
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if ne .BsonTagValue "-" }}
+		case "{{.TagValue}}":
+           bd = append(bd, bson.E{Key: "{{ .BsonTagValue }}", Value: this.{{.Name}}})
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return bd, nil
+}
+{{- end }}
+{{ if $.IsIncD}}
+// Set{{.StructName}} 指定的值,incD
+func (this *{{.StructName}}) GenIncD(keys []string) (bson.D, error) {
+    if this == nil {
+        return nil, errors.New("receiver is nil")
+    }
+    {{- if .IsHaveIncKey}}
+	bd := make([]bson.E, 0, len(keys))
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if and .IsInc (ne .BsonTagValue "-") }}
+		case "{{.TagValue}}":
+		    bd = append(bd, bson.E{Key: "{{ .BsonTagValue }}", Value: this.{{.Name}}})
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return bd, nil
     {{- else}}
 	return nil, errors.New("key is not has number")
 	{{- end }}
@@ -100,7 +153,7 @@ func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
 	if delta == nil {
 		return
 	}
-    {{- if .IsHashNumberKey}}
+    {{- if .IsHaveIncKey}}
 	for _, key := range keys {
 		switch key {
         {{- range .Fields }}
@@ -117,17 +170,51 @@ func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
 {{ if $.IsAdd}}
 // Add{{.StructName}} 指定的值,只支持数值类型
 func (this *{{.StructName}}) Add(delta *{{.StructName}}) {
-	if delta == nil {
+	if this==nil || delta == nil {
 		return
 	}
-    {{- if .IsHashNumberKey}}
+    {{- if .IsHaveAddKey}}
     {{- range .Fields }}
-    {{- if .IsInc  }}
-	this.{{.Name}} += delta.{{.Name}}
+    {{- if .IsAdd  }}
+    {{- if ne .AddFunc ""}}
+        this.{{.Name}} = {{.AddFunc}}(this.{{.Name}},delta.{{.Name}})
+    {{- else if ne .AddMethod ""}}
+        this.{{.Name}}.{{.AddMethod}}(delta.{{.Name}})
+    {{- else }}
+	    this.{{.Name}} += delta.{{.Name}}
+    {{- end}}
     {{- end }}
     {{- end }}
     {{- end}}
 }
 {{- end }}
+{{ if $.IsCopy}}
+func (this *{{.StructName}}) Copy(keys ...string) (delta *{{.StructName}}) {
+	if this == nil {
+		return nil
+	}
+    delta = &{{.StructName}}{}
+    {{- if .IsHaveCopyKey}}
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if .IsCopy  }}
+		    case "{{.TagValue}}":
+                {{- if ne .CopyFunc ""}}
+                delta.{{.Name}} = {{.CopyFunc}}(delta.{{.Name}},this.{{.Name}})
+                {{- else if ne .CopyMethod ""}}
+                delta.{{.Name}}.{{.CopyMethod}}(this.{{.Name}})
+                {{- else }}
+	            delta.{{.Name}} = this.{{.Name}}
+                {{- end}}
+            {{- end }}
+         {{- end }}
+		}
+	}
+    {{- end}}
+	return
+}
+{{- end}}
+
 
 {{- end }}
