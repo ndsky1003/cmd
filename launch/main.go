@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 )
+
+var Version = "1.0.0"
 
 var logger = &Logger{
 	BackDir:    "log",
@@ -28,18 +30,24 @@ func init() {
 	flag.IntVar(&logger.MaxAge, "maxage", 28, "max age (天)")
 	flag.BoolVar(&logger.Compress, "compress", false, "true compress,false no compress")
 	flag.BoolVar(&logger.LocalTime, "localtime", true, "true use localtime,false use utc")
+	v := flag.Bool("v", false, "print version information and exit")
+	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
+	if *v {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 }
 
 func main() {
 	if sub_exe == "" {
-		fmt.Println("子进程不能为空")
+		slog.Info("子进程不能为空")
 		return
 	}
 	if err := os.Mkdir(logger.BackDir, 0755); err != nil && !os.IsExist(err) {
 		panic(err)
 	}
-	log.SetOutput(logger)
+	slog.SetDefault(slog.New(slog.NewTextHandler(logger, nil)))
 	defer logger.Close()
 	launch()
 }
@@ -47,28 +55,25 @@ func main() {
 func launch() {
 	exepath, err := exec.LookPath(sub_exe)
 	if err != nil {
-		fmt.Println(err.Error())
+		slog.Error(err.Error())
 		return
 	}
 
 	args := os.Args[1:]
 	newArgs := make([]string, 0, len(args))
-	var isSkip bool
-	for i := 0; i < len(args); i++ {
-		if isSkip {
-			isSkip = false
-			continue
-		}
-		if a := args[i]; a == "-r" {
-			isSkip = true
+
+	for i := 0; i < len(args); {
+		if args[i] == "-r" || args[i] == "--r" {
+			i += 2 // 跳过 -r 和它的值
 			continue
 		}
 		newArgs = append(newArgs, args[i])
+		i++
 	}
 
 	cmd := exec.Command(exepath, newArgs...)
 	cmd.Stdout = logger
 	cmd.Stderr = logger
 	err = cmd.Run()
-	fmt.Println("process 正常 exit!", "exepath:", exepath, "err:", err, "args:", args, "newArgs:", newArgs)
+	slog.Info("process 正常 exit!", "exepath:", exepath, "err:", err, "args:", args, "newArgs:", newArgs)
 }

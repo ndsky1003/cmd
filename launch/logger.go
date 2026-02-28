@@ -245,9 +245,10 @@ func (l *Logger) millRunOnce() error {
 			// Only count the uncompressed log file or the
 			// compressed log file, not both.
 			fn := f.Name()
-			if strings.HasSuffix(fn, compressSuffix) {
-				fn = fn[:len(fn)-len(compressSuffix)]
-			}
+			fn = strings.TrimSuffix(fn, compressSuffix)
+			// if strings.HasSuffix(fn, compressSuffix) {
+			// 	fn = fn[:len(fn)-len(compressSuffix)]
+			// }
 			preserved[fn] = true
 
 			if len(preserved) > l.MaxBackups {
@@ -327,7 +328,7 @@ func (l *Logger) oldLogFiles() ([]logInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't read log file directory: %s", err)
 	}
-	logFiles := []logInfo{}
+	logFiles := make([]logInfo, 0, len(files))
 
 	prefix, ext := l.prefixAndExt()
 
@@ -427,7 +428,8 @@ func compressLogFile(src, dst string) (err error) {
 		}
 	}()
 
-	if _, err := io.Copy(gz, f); err != nil {
+	buf := make([]byte, 128*1024)
+	if _, err := io.CopyBuffer(gz, f, buf); err != nil {
 		return err
 	}
 	if err := gz.Close(); err != nil {
