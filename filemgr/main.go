@@ -18,6 +18,9 @@ import (
 )
 
 var (
+	// Version is set by build flags
+	Version = "dev"
+
 	Name   string
 	Urls   string
 	Root   string
@@ -36,7 +39,13 @@ func init() {
 	flag.StringVar(&Urls, "urls", "127.0.0.1:18083", "crpc address,eg:127.0.0.1:18083,localhost:18083")
 	flag.StringVar(&Root, "root", ".", "root dir")
 	flag.StringVar(&Secret, "secret", "", "secret key")
+	v := flag.Bool("v", false, "print version information and exit")
+	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
+	if *v {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 }
 
 func main() {

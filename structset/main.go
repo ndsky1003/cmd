@@ -18,7 +18,10 @@ import (
 	"github.com/samber/lo"
 )
 
-const VERSION = "v1.0.1"
+var (
+	// Version is set by build flags
+	Version = "dev"
+)
 
 const (
 	StructFieldAttr_inc     = "inc"
@@ -106,8 +109,6 @@ func formatGoFile(filePath string) error {
 func main() {
 	flag.String("useage", "useage", "structset -k=false  --sub=ccc --tagname=structset")
 	attr := flag.Bool("attr", false, "显示可以可设置的属性")
-	version := flag.Bool("version", false, "显示版本号")
-	v := flag.Bool("v", false, "显示版本号")
 	flag.StringVar(&file_path, "f", "", "需要解析的文件")
 	flag.StringVar(&out_path, "o", "", "输出的新文件")
 	flag.StringVar(&suffix, "sub", "_struct_gen", "输出的新文件的后缀")
@@ -122,7 +123,13 @@ func main() {
 	flag.BoolVar(&fileStructData.IsInc, "i", true, "是否生成结构体的Inc(detal *StructData,keys []string)")
 	flag.BoolVar(&fileStructData.IsAdd, "a", true, "是否生成结构体的Add(detal *StructData)")
 	flag.BoolVar(&fileStructData.IsCopy, "c", true, "是否生成结构体的Copy(keys []string)")
+	v := flag.Bool("v", false, "print version information and exit")
+	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
+	if *v {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 	if *attr {
 		fmt.Println("attr:", []string{
 			StructFieldAttr_inc,
@@ -133,11 +140,6 @@ func main() {
 			StructFieldAttr_no_copy})
 		fmt.Printf("可自由定制方法或者函数，函数以f_开头即可，其他都是方法\n")
 		fmt.Println("usage:structset:\"ccc,copy:f_cc,add:add_method\"")
-		return
-	}
-
-	if *v || *version {
-		fmt.Println(VERSION)
 		return
 	}
 

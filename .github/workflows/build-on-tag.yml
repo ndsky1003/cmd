@@ -1,38 +1,183 @@
-name: Build Binaries on Tag
+name: Build All Tools on Tag
+
 on:
   push:
     tags:
-      - 'v*' # 匹配以v开头的Tag，如v1.0.0
+      - 'v*'
+      - 'filemgr/v*'
+      - 'launch/v*'
+      - 'structset/v*'
+
 jobs:
+  extract_version:
+    name: Extract Version Info
+    runs-on: ubuntu-latest
+    outputs:
+      tools: ${{ steps.parse_tag.outputs.tools }}
+      is_global: ${{ steps.parse_tag.outputs.is_global }}
+    steps:
+      - name: Parse tag
+        id: parse_tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Check if it's a global tag (v*) or tool-specific tag
+          if [[ "$TAG" =~ ^filemgr/v ]]; then
+            echo "tools=[\"filemgr\"]" >> $GITHUB_OUTPUT
+            echo "is_global=false" >> $GITHUB_OUTPUT
+            echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ ^launch/v ]]; then
+            echo "tools=[\"launch\"]" >> $GITHUB_OUTPUT
+            echo "is_global=false" >> $GITHUB_OUTPUT
+            echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ ^structset/v ]]; then
+            echo "tools=[\"structset\"]" >> $GITHUB_OUTPUT
+            echo "is_global=false" >> $GITHUB_OUTPUT
+            echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT
+          else
+            # Global tag, build all tools
+            echo "tools=[\"filemgr\",\"launch\",\"structset\"]" >> $GITHUB_OUTPUT
+            echo "is_global=true" >> $GITHUB_OUTPUT
+            echo "version=${TAG}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Building tools: $TOOLS"
+          echo "Tag: $TAG"
+
   build:
+    name: Build ${{ matrix.tool }} for ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: extract_version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        tool: ${{ fromJson(needs.extract_version.outputs.tools) }}
         include:
+          # Linux builds
           - os: ubuntu-latest
-            GOOS: linux
-            GOARCH: amd64
-          - os: windows-latest
-            GOOS: windows
-            GOARCH: amd64
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+
+          # macOS builds
           - os: macos-latest
-            GOOS: darwin
-            GOARCH: amd64
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+
+          # Windows builds
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21' # 根据项目需求指定Go版本
-      - name: Build binary
+          go-version: '1.22'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Extract version number from tag
+          if [[ "$TAG" =~ ^filemgr/v ]]; then
+            VERSION="${TAG#filemgr/}"
+          elif [[ "$TAG" =~ ^launch/v ]]; then
+            VERSION="${TAG#launch/}"
+          elif [[ "$TAG" =~ ^structset/v ]]; then
+            VERSION="${TAG#structset/}"
+          else
+            VERSION="$TAG"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building ${{ matrix.tool }} version: $VERSION"
+
+      - name: Build ${{ matrix.tool }}
         env:
-          GOOS: ${{ matrix.GOOS }}
-          GOARCH: ${{ matrix.GOARCH }}
-        run: go build -o myapp-${{ matrix.GOOS }}-${{ matrix.GOARCH }} ./cmd/myapp
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          OUTPUT_NAME="${{ matrix.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          fi
+
+          # Build with version injected via ldflags
+          go build \
+            -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.version }}" \
+            -o "$OUTPUT_NAME" \
+            ./${{ matrix.tool }}
+
+          echo "BUILT_BINARY=$OUTPUT_NAME" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: myapp-${{ matrix.GOOS }}-${{ matrix.GOARCH }}
-          path: myapp-${{ matrix.GOOS }}-${{ matrix.GOARCH }}
+          name: ${{ env.BUILT_BINARY }}
+          path: ${{ env.BUILT_BINARY }}
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: [extract_version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MY_PAT: ${{ secrets.MY_PAT }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Use PAT if available, otherwise use GITHUB_TOKEN
+          if [ -n "$MY_PAT" ]; then
+            TOKEN="$MY_PAT"
+          else
+            TOKEN="$GITHUB_TOKEN"
+          fi
+
+          # Set release title based on tag type
+          if [[ "$TAG" =~ ^filemgr/v ]]; then
+            TITLE="filemgr ${TAG#filemgr/}"
+          elif [[ "$TAG" =~ ^launch/v ]]; then
+            TITLE="launch ${TAG#launch/}"
+          elif [[ "$TAG" =~ ^structset/v ]]; then
+            TITLE="structset ${TAG#structset/}"
+          else
+            TITLE="Release ${TAG}"
+          fi
+
+          # Create release with all artifacts
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --generate-notes \
+            --repo "$GITHUB_REPOSITORY" \
+            ./artifacts/*/*
