@@ -121,6 +121,9 @@ jobs:
             -o "$OUTPUT_NAME" \
             ./${{ matrix.tool }}
 
+          # Make binary executable
+          chmod +x "$OUTPUT_NAME"
+
           echo "BUILT_BINARY=$OUTPUT_NAME" >> $GITHUB_ENV
 
       - name: Upload artifact
@@ -129,6 +132,7 @@ jobs:
           name: ${{ env.BUILT_BINARY }}
           path: ${{ env.BUILT_BINARY }}
           retention-days: 7
+          if-no-files-found: error
 
   release:
     name: Create Release
@@ -149,6 +153,12 @@ jobs:
 
       - name: Display structure of downloaded files
         run: ls -R ./artifacts
+
+      - name: Make binaries executable
+        run: |
+          find ./artifacts -type f -exec chmod +x {} \;
+          echo "Made all binaries executable"
+          ls -la ./artifacts/*/*
 
       - name: Create Release
         env:
