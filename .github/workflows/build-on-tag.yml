@@ -157,16 +157,32 @@ jobs:
 
       - name: Make binaries executable and flatten directory
         run: |
-          # 将所有二进制文件移动到 artifacts 根目录，并确保可执行权限
-          find ./artifacts -type f -name 'filemgr-*' -exec chmod +x {} \; -exec mv {} ./artifacts/ \;
-          find ./artifacts -type f -name 'launch-*' -exec chmod +x {} \; -exec mv {} ./artifacts/ \;
-          find ./artifacts -type f -name 'structset-*' -exec chmod +x {} \; -exec mv {} ./artifacts/ \;
-          # 清理空目录
-          find ./artifacts -type d -empty -delete
+          # 创建一个扁平化的目录
+          mkdir -p ./release
+
+          # 找到所有二进制文件，设置权限并移动到 release 目录
+          for dir in ./artifacts/*/; do
+            if [ -d "$dir" ]; then
+              for file in "$dir"/*; do
+                if [ -f "$file" ]; then
+                  chmod +x "$file"
+                  cp "$file" ./release/
+                  echo "Processed: $file"
+                fi
+              done
+            fi
+          done
+
+          # 删除原来的 artifacts 目录
+          rm -rf ./artifacts
+
+          # 将 release 重命名为 artifacts
+          mv ./release ./artifacts
+
           echo "Final artifacts structure:"
           ls -la ./artifacts/
           echo "Verifying executable permissions:"
-          ls -l ./artifacts/ | grep -E 'filemgr|launch|structset'
+          ls -l ./artifacts/
 
       - name: Create Release
         env:
