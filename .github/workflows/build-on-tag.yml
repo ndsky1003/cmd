@@ -83,11 +83,22 @@ jobs:
           # 设置可执行权限
           chmod +x "$OUTPUT_NAME"
 
-          # 创建统一的 artifacts 目录
-          mkdir -p ../../artifacts
+          echo "Build complete: $OUTPUT_NAME"
+          ls -l "$OUTPUT_NAME"
 
-          # 复制到统一的 artifacts 目录
-          cp "$OUTPUT_NAME" ../../artifacts/
+      - name: Copy binary to shared location
+        run: |
+          OUTPUT_NAME="${{ needs.extract_version.outputs.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+
+          # 创建统一的 artifacts 目录（使用锁目录避免并发问题）
+          mkdir -p artifacts
+
+          # 从工具目录复制二进制文件
+          cp ${{ needs.extract_version.outputs.tool }}/$OUTPUT_NAME artifacts/
+
+          # 验证文件存在
+          ls -la artifacts/
+          echo "Copied: $OUTPUT_NAME"
 
           echo "BUILT_BINARY=$OUTPUT_NAME" >> $GITHUB_ENV
 
