@@ -21,16 +21,16 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Processing tag: $TAG"
 
-          # 解析工具名称和版本
+          # 解析工具名称和版本（版本号不包含工具前缀）
           if [[ "$TAG" =~ ^launch/ ]]; then
             echo "tool=launch" >> $GITHUB_OUTPUT
-            echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT
+            echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT  # 去掉 launch/ 前缀
           elif [[ "$TAG" =~ ^filemgr/ ]]; then
             echo "tool=filemgr" >> $GITHUB_OUTPUT
-            echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT
+            echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT  # 去掉 filemgr/ 前缀
           elif [[ "$TAG" =~ ^structset/ ]]; then
             echo "tool=structset" >> $GITHUB_OUTPUT
-            echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT
+            echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT  # 去掉 structset/ 前缀
           else
             echo "Unknown tag format: $TAG"
             exit 1
@@ -77,13 +77,15 @@ jobs:
         run: |
           OUTPUT_NAME="${{ needs.extract_version.outputs.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
 
-          # 构建，不需要 ldflags 注入版本号
-          go build -ldflags="-s -w" -o "$OUTPUT_NAME" .
+          # 构建并注入版本号
+          go build \
+            -ldflags="-s -w -X main.Version=${{ needs.extract_version.outputs.version }}" \
+            -o "$OUTPUT_NAME" .
 
           # 设置可执行权限
           chmod +x "$OUTPUT_NAME"
 
-          echo "Build complete: $OUTPUT_NAME"
+          echo "Build complete: $OUTPUT_NAME (version: ${{ needs.extract_version.outputs.version }})"
           ls -l "$OUTPUT_NAME"
 
       - name: Copy binary to shared location
