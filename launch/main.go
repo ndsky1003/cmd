@@ -6,9 +6,32 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime/debug"
 )
 
-var Version = "1.0.0"
+var Version = "dev"
+
+func getVersion() string {
+	// 1. 如果通过 ldflags 注入了版本，直接使用
+	if Version != "dev" {
+		return Version
+	}
+
+	// 2. 否则尝试从 Go modules 构建信息读取
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+
+	// 3. 如果是通过 go install 安装的，info.Main.Version 会包含版本信息
+	//    例如: v1.2.3, 或者 devel (如果是本地开发)
+	if info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+
+	// 4. 本地开发，返回 commit hash 或者时间
+	return "dev"
+}
 
 var logger = &Logger{
 	BackDir:    "log",
@@ -34,7 +57,7 @@ func init() {
 	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
 	if *v {
-		fmt.Println(Version)
+		fmt.Println(getVersion())
 		os.Exit(0)
 	}
 }

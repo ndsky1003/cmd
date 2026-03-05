@@ -126,8 +126,9 @@ jobs:
 
           echo "BUILT_BINARY=$OUTPUT_NAME" >> $GITHUB_ENV
 
-      - name: Upload artifact
+      - name: Upload artifact (for debugging)
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: ${{ env.BUILT_BINARY }}
           path: ${{ env.BUILT_BINARY }}
@@ -154,11 +155,18 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R ./artifacts
 
-      - name: Make binaries executable
+      - name: Make binaries executable and flatten directory
         run: |
-          find ./artifacts -type f -exec chmod +x {} \;
-          echo "Made all binaries executable"
-          ls -la ./artifacts/*/*
+          # 将所有二进制文件移动到 artifacts 根目录，并确保可执行权限
+          find ./artifacts -type f -name 'filemgr-*' -exec chmod +x {} \; -exec mv {} ./artifacts/ \;
+          find ./artifacts -type f -name 'launch-*' -exec chmod +x {} \; -exec mv {} ./artifacts/ \;
+          find ./artifacts -type f -name 'structset-*' -exec chmod +x {} \; -exec mv {} ./artifacts/ \;
+          # 清理空目录
+          find ./artifacts -type d -empty -delete
+          echo "Final artifacts structure:"
+          ls -la ./artifacts/
+          echo "Verifying executable permissions:"
+          ls -l ./artifacts/ | grep -E 'filemgr|launch|structset'
 
       - name: Create Release
         env:
@@ -185,9 +193,9 @@ jobs:
             TITLE="Release ${TAG}"
           fi
 
-          # Create release with all artifacts
+          # Create release with all binaries
           gh release create "$TAG" \
             --title "$TITLE" \
             --generate-notes \
             --repo "$GITHUB_REPOSITORY" \
-            ./artifacts/*/*
+            ./artifacts/*
