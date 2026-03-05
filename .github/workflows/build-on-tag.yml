@@ -66,22 +66,14 @@ jobs:
     strategy:
       matrix:
         tool: ${{ fromJson(needs.extract_version.outputs.tools) }}
-        include:
-          # Linux builds
+        os: [ubuntu-latest, macos-latest]
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+        exclude:
           - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-
-          # macOS builds
-          - os: macos-latest
             goos: darwin
-            goarch: amd64
           - os: macos-latest
-            goos: darwin
-            goarch: arm64
+            goos: linux
 
     steps:
       - name: Checkout code
