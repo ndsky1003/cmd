@@ -1,71 +1,50 @@
-name: Build All Tools on Tag
+name: Build Tools on Tag
 
 on:
   push:
-    branches:
-      - main
     tags:
-      - 'v*'
-      - 'filemgr-v*'
-      - 'launch-v*'
-      - 'structset-v*'
+      - 'launch/**'
+      - 'filemgr/**'
+      - 'structset/**'
 
 jobs:
   extract_version:
     name: Extract Version Info
     runs-on: ubuntu-latest
     outputs:
-      tools: ${{ steps.parse_tag.outputs.tools }}
-      is_global: ${{ steps.parse_tag.outputs.is_global }}
-      is_tag: ${{ steps.parse_tag.outputs.is_tag }}
+      tool: ${{ steps.parse_tag.outputs.tool }}
+      version: ${{ steps.parse_tag.outputs.version }}
     steps:
       - name: Parse tag
         id: parse_tag
         run: |
-          REF="${GITHUB_REF}"
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Processing tag: $TAG"
 
-          # Check if it's a tag or branch push
-          if [[ "$REF" =~ ^refs/tags/ ]]; then
-            echo "is_tag=true" >> $GITHUB_OUTPUT
-            TAG="${REF#refs/tags/}"
-
-            # Check if it's a global tag (v*) or tool-specific tag
-            if [[ "$TAG" =~ ^filemgr-v ]]; then
-              echo "tools=[\"filemgr\"]" >> $GITHUB_OUTPUT
-              echo "is_global=false" >> $GITHUB_OUTPUT
-              echo "version=${TAG#filemgr-}" >> $GITHUB_OUTPUT
-            elif [[ "$TAG" =~ ^launch-v ]]; then
-              echo "tools=[\"launch\"]" >> $GITHUB_OUTPUT
-              echo "is_global=false" >> $GITHUB_OUTPUT
-              echo "version=${TAG#launch-}" >> $GITHUB_OUTPUT
-            elif [[ "$TAG" =~ ^structset-v ]]; then
-              echo "tools=[\"structset\"]" >> $GITHUB_OUTPUT
-              echo "is_global=false" >> $GITHUB_OUTPUT
-              echo "version=${TAG#structset-}" >> $GITHUB_OUTPUT
-            else
-              # Global tag, build all tools
-              echo "tools=[\"filemgr\",\"launch\",\"structset\"]" >> $GITHUB_OUTPUT
-              echo "is_global=true" >> $GITHUB_OUTPUT
-              echo "version=${TAG}" >> $GITHUB_OUTPUT
-            fi
-
-            echo "Building tools from tag: $TAG"
+          # 解析工具名称和版本
+          if [[ "$TAG" =~ ^launch/ ]]; then
+            echo "tool=launch" >> $GITHUB_OUTPUT
+            echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ ^filemgr/ ]]; then
+            echo "tool=filemgr" >> $GITHUB_OUTPUT
+            echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ ^structset/ ]]; then
+            echo "tool=structset" >> $GITHUB_OUTPUT
+            echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT
           else
-            # Branch push - use dev version and build all tools
-            echo "is_tag=false" >> $GITHUB_OUTPUT
-            echo "tools=[\"filemgr\",\"launch\",\"structset\"]" >> $GITHUB_OUTPUT
-            echo "is_global=true" >> $GITHUB_OUTPUT
-            echo "version=dev" >> $GITHUB_OUTPUT
-            echo "Building tools from branch (dev version)"
+            echo "Unknown tag format: $TAG"
+            exit 1
           fi
 
+          echo "Building tool: ${{ steps.parse_tag.outputs.tool }}"
+          echo "Version: ${{ steps.parse_tag.outputs.version }}"
+
   build:
-    name: Build ${{ matrix.tool }} for ${{ matrix.goos }}-${{ matrix.goarch }}
+    name: Build ${{ needs.extract_version.outputs.tool }} for ${{ matrix.goos }}-${{ matrix.goarch }}
     needs: extract_version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        tool: ${{ fromJson(needs.extract_version.outputs.tools) }}
         os: [ubuntu-latest, macos-latest]
         goos: [linux, darwin]
         goarch: [amd64, arm64]
@@ -83,52 +62,34 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: true
+          cache: false  # 禁用缓存，因为我们在子目录中构建
 
       - name: Download dependencies
+        working-directory: ./${{ needs.extract_version.outputs.tool }}
         run: go mod download
-
-      - name: Get version from tag
-        id: get_version
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-
-          # Extract version number from tag
-          if [[ "$TAG" =~ ^filemgr-v ]]; then
-            VERSION="${TAG#filemgr-}"
-          elif [[ "$TAG" =~ ^launch-v ]]; then
-            VERSION="${TAG#launch-}"
-          elif [[ "$TAG" =~ ^structset-v ]]; then
-            VERSION="${TAG#structset-}"
-          else
-            VERSION="$TAG"
-          fi
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building ${{ matrix.tool }} version: $VERSION"
 
       - name: Build ${{ matrix.tool }}
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+        working-directory: ./${{ needs.extract_version.outputs.tool }}
         run: |
-          OUTPUT_NAME="${{ matrix.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          OUTPUT_NAME="${{ needs.extract_version.outputs.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
 
-          # Build with version injected via ldflags
-          go build \
-            -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.version }}" \
-            -o "$OUTPUT_NAME" \
-            ./${{ matrix.tool }}
+          # 构建，不需要 ldflags 注入版本号
+          go build -ldflags="-s -w" -o "$OUTPUT_NAME" .
 
-          # Make binary executable
+          # 设置可执行权限
           chmod +x "$OUTPUT_NAME"
+
+          # 移动到根目录
+          mv "$OUTPUT_NAME" ../../
 
           echo "BUILT_BINARY=$OUTPUT_NAME" >> $GITHUB_ENV
 
-      - name: Upload artifact (for debugging)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: ${{ env.BUILT_BINARY }}
           path: ${{ env.BUILT_BINARY }}
@@ -141,7 +102,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: needs.extract_version.outputs.is_tag == 'true'
 
     steps:
       - name: Checkout code
@@ -152,12 +112,9 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Display structure of downloaded files
-        run: ls -R ./artifacts
-
-      - name: Make binaries executable and flatten directory
+      - name: Prepare release files
         run: |
-          # 创建一个扁平化的目录
+          # 创建扁平化的 release 目录
           mkdir -p ./release
 
           # 找到所有二进制文件，设置权限并移动到 release 目录
@@ -173,14 +130,13 @@ jobs:
             fi
           done
 
-          # 删除原来的 artifacts 目录
+          # 清理并显示结果
           rm -rf ./artifacts
-
-          # 将 release 重命名为 artifacts
           mv ./release ./artifacts
 
           echo "Final artifacts structure:"
           ls -la ./artifacts/
+          echo ""
           echo "Verifying executable permissions:"
           ls -l ./artifacts/
 
@@ -190,6 +146,7 @@ jobs:
           MY_PAT: ${{ secrets.MY_PAT }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          TOOL="${{ needs.extract_version.outputs.tool }}"
 
           # Use PAT if available, otherwise use GITHUB_TOKEN
           if [ -n "$MY_PAT" ]; then
@@ -198,20 +155,14 @@ jobs:
             TOKEN="$GITHUB_TOKEN"
           fi
 
-          # Set release title based on tag type
-          if [[ "$TAG" =~ ^filemgr-v ]]; then
-            TITLE="filemgr ${TAG#filemgr-}"
-          elif [[ "$TAG" =~ ^launch-v ]]; then
-            TITLE="launch ${TAG#launch-}"
-          elif [[ "$TAG" =~ ^structset-v ]]; then
-            TITLE="structset ${TAG#structset-}"
-          else
-            TITLE="Release ${TAG}"
-          fi
+          # 设置 Release 标题
+          TITLE="$TOOL ${{ needs.extract_version.outputs.version }}"
 
-          # Create release with all binaries
+          # 创建 Release
           gh release create "$TAG" \
             --title "$TITLE" \
             --generate-notes \
             --repo "$GITHUB_REPOSITORY" \
             ./artifacts/*
+
+          echo "Release created: $TAG"
