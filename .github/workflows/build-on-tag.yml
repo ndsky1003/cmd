@@ -95,6 +95,7 @@ jobs:
           path: ${{ env.BUILT_BINARY }}
           retention-days: 7
           if-no-files-found: error
+          working-directory: ${{ github.workspace }}
 
   release:
     name: Create Release
