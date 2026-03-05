@@ -37,13 +37,13 @@ func getVersion() string {
 	}
 
 	// 3. 如果是通过 go install 安装的，info.Main.Version 会包含版本信息
-	//    例如: structset/v1.0.0, 或者 devel (如果是本地开发)
+	//    例如: structset-v1.0.0, 或者 devel (如果是本地开发)
 	if info.Main.Version != "(devel)" {
-		// 从 tool/v1.0.0 格式中提取 v1.0.0
+		// 从 tool-v1.0.0 格式中提取 v1.0.0
 		version := info.Main.Version
-		// 检查是否包含斜杠（工具名/版本号）
-		if idx := strings.Index(version, "/"); idx != -1 {
-			return version[idx+1:] // 返回斜杠后的部分
+		// 检查是否包含 -v（工具名-v版本号）
+		if idx := strings.Index(version, "-v"); idx != -1 {
+			return version[idx+1:] // 返回 -v 后的部分
 		}
 		return version
 	}
