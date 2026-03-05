@@ -2,6 +2,8 @@ name: Build All Tools on Tag
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
       - 'filemgr/v*'
@@ -15,34 +17,47 @@ jobs:
     outputs:
       tools: ${{ steps.parse_tag.outputs.tools }}
       is_global: ${{ steps.parse_tag.outputs.is_global }}
+      is_tag: ${{ steps.parse_tag.outputs.is_tag }}
     steps:
       - name: Parse tag
         id: parse_tag
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          REF="${GITHUB_REF}"
 
-          # Check if it's a global tag (v*) or tool-specific tag
-          if [[ "$TAG" =~ ^filemgr/v ]]; then
-            echo "tools=[\"filemgr\"]" >> $GITHUB_OUTPUT
-            echo "is_global=false" >> $GITHUB_OUTPUT
-            echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT
-          elif [[ "$TAG" =~ ^launch/v ]]; then
-            echo "tools=[\"launch\"]" >> $GITHUB_OUTPUT
-            echo "is_global=false" >> $GITHUB_OUTPUT
-            echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT
-          elif [[ "$TAG" =~ ^structset/v ]]; then
-            echo "tools=[\"structset\"]" >> $GITHUB_OUTPUT
-            echo "is_global=false" >> $GITHUB_OUTPUT
-            echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT
+          # Check if it's a tag or branch push
+          if [[ "$REF" =~ ^refs/tags/ ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+            TAG="${REF#refs/tags/}"
+
+            # Check if it's a global tag (v*) or tool-specific tag
+            if [[ "$TAG" =~ ^filemgr/v ]]; then
+              echo "tools=[\"filemgr\"]" >> $GITHUB_OUTPUT
+              echo "is_global=false" >> $GITHUB_OUTPUT
+              echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" =~ ^launch/v ]]; then
+              echo "tools=[\"launch\"]" >> $GITHUB_OUTPUT
+              echo "is_global=false" >> $GITHUB_OUTPUT
+              echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" =~ ^structset/v ]]; then
+              echo "tools=[\"structset\"]" >> $GITHUB_OUTPUT
+              echo "is_global=false" >> $GITHUB_OUTPUT
+              echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT
+            else
+              # Global tag, build all tools
+              echo "tools=[\"filemgr\",\"launch\",\"structset\"]" >> $GITHUB_OUTPUT
+              echo "is_global=true" >> $GITHUB_OUTPUT
+              echo "version=${TAG}" >> $GITHUB_OUTPUT
+            fi
+
+            echo "Building tools from tag: $TAG"
           else
-            # Global tag, build all tools
+            # Branch push - use dev version and build all tools
+            echo "is_tag=false" >> $GITHUB_OUTPUT
             echo "tools=[\"filemgr\",\"launch\",\"structset\"]" >> $GITHUB_OUTPUT
             echo "is_global=true" >> $GITHUB_OUTPUT
-            echo "version=${TAG}" >> $GITHUB_OUTPUT
+            echo "version=dev" >> $GITHUB_OUTPUT
+            echo "Building tools from branch (dev version)"
           fi
-
-          echo "Building tools: $TOOLS"
-          echo "Tag: $TAG"
 
   build:
     name: Build ${{ matrix.tool }} for ${{ matrix.goos }}-${{ matrix.goarch }}
@@ -67,11 +82,6 @@ jobs:
           - os: macos-latest
             goos: darwin
             goarch: arm64
-
-          # Windows builds
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
 
     steps:
       - name: Checkout code
@@ -112,9 +122,6 @@ jobs:
           CGO_ENABLED: 0
         run: |
           OUTPUT_NAME="${{ matrix.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            OUTPUT_NAME="${OUTPUT_NAME}.exe"
-          fi
 
           # Build with version injected via ldflags
           go build \
@@ -137,6 +144,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: needs.extract_version.outputs.is_tag == 'true'
 
     steps:
       - name: Checkout code
