@@ -6,9 +6,9 @@ on:
       - main
     tags:
       - 'v*'
-      - 'filemgr/v*'
-      - 'launch/v*'
-      - 'structset/v*'
+      - 'filemgr-v*'
+      - 'launch-v*'
+      - 'structset-v*'
 
 jobs:
   extract_version:
@@ -30,18 +30,18 @@ jobs:
             TAG="${REF#refs/tags/}"
 
             # Check if it's a global tag (v*) or tool-specific tag
-            if [[ "$TAG" =~ ^filemgr/v ]]; then
+            if [[ "$TAG" =~ ^filemgr-v ]]; then
               echo "tools=[\"filemgr\"]" >> $GITHUB_OUTPUT
               echo "is_global=false" >> $GITHUB_OUTPUT
-              echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT
-            elif [[ "$TAG" =~ ^launch/v ]]; then
+              echo "version=${TAG#filemgr-}" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" =~ ^launch-v ]]; then
               echo "tools=[\"launch\"]" >> $GITHUB_OUTPUT
               echo "is_global=false" >> $GITHUB_OUTPUT
-              echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT
-            elif [[ "$TAG" =~ ^structset/v ]]; then
+              echo "version=${TAG#launch-}" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" =~ ^structset-v ]]; then
               echo "tools=[\"structset\"]" >> $GITHUB_OUTPUT
               echo "is_global=false" >> $GITHUB_OUTPUT
-              echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT
+              echo "version=${TAG#structset-}" >> $GITHUB_OUTPUT
             else
               # Global tag, build all tools
               echo "tools=[\"filemgr\",\"launch\",\"structset\"]" >> $GITHUB_OUTPUT
@@ -94,12 +94,12 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
 
           # Extract version number from tag
-          if [[ "$TAG" =~ ^filemgr/v ]]; then
-            VERSION="${TAG#filemgr/}"
-          elif [[ "$TAG" =~ ^launch/v ]]; then
-            VERSION="${TAG#launch/}"
-          elif [[ "$TAG" =~ ^structset/v ]]; then
-            VERSION="${TAG#structset/}"
+          if [[ "$TAG" =~ ^filemgr-v ]]; then
+            VERSION="${TAG#filemgr-}"
+          elif [[ "$TAG" =~ ^launch-v ]]; then
+            VERSION="${TAG#launch-}"
+          elif [[ "$TAG" =~ ^structset-v ]]; then
+            VERSION="${TAG#structset-}"
           else
             VERSION="$TAG"
           fi
@@ -165,12 +165,12 @@ jobs:
           fi
 
           # Set release title based on tag type
-          if [[ "$TAG" =~ ^filemgr/v ]]; then
-            TITLE="filemgr ${TAG#filemgr/}"
-          elif [[ "$TAG" =~ ^launch/v ]]; then
-            TITLE="launch ${TAG#launch/}"
-          elif [[ "$TAG" =~ ^structset/v ]]; then
-            TITLE="structset ${TAG#structset/}"
+          if [[ "$TAG" =~ ^filemgr-v ]]; then
+            TITLE="filemgr ${TAG#filemgr-}"
+          elif [[ "$TAG" =~ ^launch-v ]]; then
+            TITLE="launch ${TAG#launch-}"
+          elif [[ "$TAG" =~ ^structset-v ]]; then
+            TITLE="structset ${TAG#structset-}"
           else
             TITLE="Release ${TAG}"
           fi
