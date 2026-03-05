@@ -83,8 +83,11 @@ jobs:
           # 设置可执行权限
           chmod +x "$OUTPUT_NAME"
 
-          # 移动到根目录
-          mv "$OUTPUT_NAME" ../../
+          # 创建统一的 artifacts 目录
+          mkdir -p ../../artifacts
+
+          # 复制到统一的 artifacts 目录
+          cp "$OUTPUT_NAME" ../../artifacts/
 
           echo "BUILT_BINARY=$OUTPUT_NAME" >> $GITHUB_ENV
 
@@ -92,10 +95,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BUILT_BINARY }}
-          path: ${{ env.BUILT_BINARY }}
+          path: artifacts/${{ env.BUILT_BINARY }}
           retention-days: 7
           if-no-files-found: error
-          working-directory: ${{ github.workspace }}
 
   release:
     name: Create Release
@@ -111,29 +113,28 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          path: ./downloaded_artifacts
 
       - name: Prepare release files
         run: |
           # 创建扁平化的 release 目录
-          mkdir -p ./release
+          mkdir -p ./artifacts
 
           # 找到所有二进制文件，设置权限并移动到 release 目录
-          for dir in ./artifacts/*/; do
+          for dir in ./downloaded_artifacts/*/; do
             if [ -d "$dir" ]; then
               for file in "$dir"/*; do
                 if [ -f "$file" ]; then
                   chmod +x "$file"
-                  cp "$file" ./release/
+                  cp "$file" ./artifacts/
                   echo "Processed: $file"
                 fi
               done
             fi
           done
 
-          # 清理并显示结果
-          rm -rf ./artifacts
-          mv ./release ./artifacts
+          # 清理下载目录
+          rm -rf ./downloaded_artifacts
 
           echo "Final artifacts structure:"
           ls -la ./artifacts/
