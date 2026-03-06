@@ -2,7 +2,12 @@ module github.com/ndsky1003/cmd/filemgr
 
 go 1.25.7
 
-require github.com/ndsky1003/crpc/v2 v2.0.17
+require (
+	github.com/ndsky1003/cmd/internal v0.0.0
+	github.com/ndsky1003/crpc/v2 v2.0.17
+)
+
+replace github.com/ndsky1003/cmd/internal => ../internal
 
 require (
 	github.com/golang/snappy v0.0.4 // indirect

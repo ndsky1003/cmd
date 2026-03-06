@@ -12,10 +12,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime/debug"
 	"strings"
 	"text/template"
 
+	"github.com/ndsky1003/cmd/internal/version"
 	"github.com/samber/lo"
 )
 
@@ -23,34 +23,6 @@ var (
 	// Version is set by build flags
 	Version = "dev"
 )
-
-func getVersion() string {
-	// 1. 如果通过 ldflags 注入了版本，直接使用
-	if Version != "dev" {
-		return Version
-	}
-
-	// 2. 否则尝试从 Go modules 构建信息读取
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "unknown"
-	}
-
-	// 3. 如果是通过 go install 安装的，info.Main.Version 会包含版本信息
-	//    例如: structset-v1.0.0, 或者 devel (如果是本地开发)
-	if info.Main.Version != "(devel)" {
-		// 从 tool-v1.0.0 格式中提取 v1.0.0
-		version := info.Main.Version
-		// 检查是否包含 -v（工具名-v版本号）
-		if idx := strings.Index(version, "-v"); idx != -1 {
-			return version[idx+1:] // 返回 -v 后的部分
-		}
-		return version
-	}
-
-	// 4. 本地开发，返回 dev
-	return "dev"
-}
 
 const (
 	StructFieldAttr_inc     = "inc"
@@ -156,7 +128,7 @@ func main() {
 	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
 	if *v {
-		fmt.Printf("structset version %s\n", getVersion())
+		fmt.Printf("structset version %s\n", version.GetVersion(Version))
 		os.Exit(0)
 	}
 	if *attr {

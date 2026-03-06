@@ -2,6 +2,11 @@ module github.com/ndsky1003/cmd/structset
 
 go 1.25.7
 
-require github.com/samber/lo v1.53.0
+require (
+	github.com/ndsky1003/cmd/internal v0.0.0
+	github.com/samber/lo v1.53.0
+)
+
+replace github.com/ndsky1003/cmd/internal => ../internal
 
 require golang.org/x/text v0.22.0 // indirect

@@ -3,9 +3,9 @@ name: Build Tools on Tag
 on:
   push:
     tags:
-      - 'launch-v*'
-      - 'filemgr-v*'
-      - 'structset-v*'
+      - 'launch/**'
+      - 'filemgr/**'
+      - 'structset/**'
 
 jobs:
   extract_version:
@@ -21,23 +21,23 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Processing tag: $TAG"
 
-          # 解析工具名称和版本（格式: launch-v1.0.5）
-          if [[ "$TAG" =~ ^launch-v ]]; then
+          # 解析工具名称和版本（格式: launch/v1.0.5）
+          if [[ "$TAG" =~ ^launch/ ]]; then
             echo "tool=launch" >> $GITHUB_OUTPUT
-            echo "version=${TAG#launch-v}" >> $GITHUB_OUTPUT  # 去掉 launch-v 前缀
-          elif [[ "$TAG" =~ ^filemgr-v ]]; then
+            echo "version=${TAG#launch/}" >> $GITHUB_OUTPUT  # 去掉 launch/ 前缀
+          elif [[ "$TAG" =~ ^filemgr/ ]]; then
             echo "tool=filemgr" >> $GITHUB_OUTPUT
-            echo "version=${TAG#filemgr-v}" >> $GITHUB_OUTPUT  # 去掉 filemgr-v 前缀
-          elif [[ "$TAG" =~ ^structset-v ]]; then
+            echo "version=${TAG#filemgr/}" >> $GITHUB_OUTPUT  # 去掉 filemgr/ 前缀
+          elif [[ "$TAG" =~ ^structset/ ]]; then
             echo "tool=structset" >> $GITHUB_OUTPUT
-            echo "version=${TAG#structset-v}" >> $GITHUB_OUTPUT  # 去掉 structset-v 前缀
+            echo "version=${TAG#structset/}" >> $GITHUB_OUTPUT  # 去掉 structset/ 前缀
           else
             echo "Unknown tag format: $TAG"
             exit 1
           fi
 
           echo "Building tool: ${{ steps.parse_tag.outputs.tool }}"
-          echo "Version: v${{ steps.parse_tag.outputs.version }}"
+          echo "Version: ${{ steps.parse_tag.outputs.version }}"
 
   build:
     name: Build ${{ needs.extract_version.outputs.tool }} for ${{ matrix.goos }}-${{ matrix.goarch }}
@@ -77,15 +77,15 @@ jobs:
         run: |
           OUTPUT_NAME="${{ needs.extract_version.outputs.tool }}-${{ matrix.goos }}-${{ matrix.goarch }}"
 
-          # 构建并注入版本号（添加 v 前缀）
+          # 构建并注入版本号
           go build \
-            -ldflags="-s -w -X main.Version=v${{ needs.extract_version.outputs.version }}" \
+            -ldflags="-s -w -X main.Version=${{ needs.extract_version.outputs.version }}" \
             -o "$OUTPUT_NAME" .
 
           # 设置可执行权限
           chmod +x "$OUTPUT_NAME"
 
-          echo "Build complete: $OUTPUT_NAME (version: v${{ needs.extract_version.outputs.version }})"
+          echo "Build complete: $OUTPUT_NAME (version: ${{ needs.extract_version.outputs.version }})"
           ls -l "$OUTPUT_NAME"
 
       - name: Copy binary to shared location
