@@ -1,0 +1,12 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "filemgr_front",
+  "outputfilename": "filemgr_front",
+  "wailsjsdir": "./frontend",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "author": {
+    "name": "cc",
+    "email": "cc@1t.com"
+  }
+}
