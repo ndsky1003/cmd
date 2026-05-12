@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,25 +23,40 @@ import (
 var (
 	// Version is set by build flags
 	Version = "dev"
-
-	Name   string
-	Urls   string
-	Root   string
-	Secret string
+	Name    string
+	Urls    string
+	Root    string
+	CDN     string
 )
 
 var (
-	IsServer bool
-	Uris     string
+	NoWeb   bool
+	WebAddr string
 )
 
+var serverFlag struct {
+	IsServer bool
+	Secret   string
+	Uris     string
+}
+
+var clientFlag struct {
+	IsClient   bool
+	ClientName string
+	ClientUris string
+}
+
 func init() {
-	flag.BoolVar(&IsServer, "isserver", false, "is server")
-	flag.StringVar(&Uris, "uris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
+	flag.BoolVar(&serverFlag.IsServer, "server", false, "是否启动server服务器")
+	flag.StringVar(&serverFlag.Secret, "serversecret", "", "secret key")
+	flag.StringVar(&serverFlag.Uris, "serveruris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
+
 	flag.StringVar(&Name, "name", "filemgr", "server name, regist in crpc")
 	flag.StringVar(&Urls, "urls", "127.0.0.1:18083", "crpc address,eg:127.0.0.1:18083,localhost:18083")
 	flag.StringVar(&Root, "root", ".", "root dir")
-	flag.StringVar(&Secret, "secret", "", "secret key")
+	flag.StringVar(&CDN, "cdn", "", "cdn base url for file access")
+	flag.BoolVar(&NoWeb, "noweb", false, "disable web ui")
+	flag.StringVar(&WebAddr, "web", ":18084", "web ui listen address")
 	v := flag.Bool("v", false, "print version information and exit")
 	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
@@ -51,38 +67,64 @@ func init() {
 }
 
 func main() {
-	if IsServer {
-		if Secret == "" {
+	if serverFlag.IsServer {
+		if serverFlag.Secret == "" {
 			randstr := time.Now().UnixNano()
 			hash := md5.Sum(fmt.Appendf([]byte{}, "%d", randstr))
-			Secret = hex.EncodeToString(hash[:])
+			serverFlag.Secret = hex.EncodeToString(hash[:])
 		}
-		Server(Secret)
+		if err := Server(serverFlag.Secret); err != nil {
+			panic(fmt.Errorf("crpc server error:%v", err))
+		}
 	}
-	urls := strings.SplitSeq(Urls, ",")
-	for url := range urls {
-		fmt.Println("Dial:", url, Name)
-		tmpclient, err := crpc.Dial(context.Background(), Name, url, crpc.ClientOptions().SetSecret(Secret))
-		if err != nil {
-			panic(err)
+	if Urls != "" {
+		urls := strings.SplitSeq(Urls, ",")
+		for url := range urls {
+			fmt.Println("Dial:", url, Name)
+			tmpclient, err := crpc.Dial(context.Background(), Name, url, crpc.ClientOptions().SetSecret(Secret))
+			if err != nil {
+				fmt.Println("crpc dial error:", err)
+				continue
+			}
+			if err := tmpclient.RegisterName("crpc", &msg{}); err != nil {
+				fmt.Println("crpc register error:", err)
+				continue
+			}
 		}
-		if err := tmpclient.RegisterName("crpc", &msg{}); err != nil {
-			panic(err)
+	}
+	if !NoWeb {
+		if err := startWebServer(WebAddr); err != nil {
+			fmt.Println("web ui error:", err)
 		}
 	}
 	select {}
 }
 
+func safePath(root, reqPath string) (string, error) {
+	if reqPath == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	full := filepath.Join(root, reqPath)
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	absFull, err := filepath.Abs(full)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(absFull, absRoot) {
+		return "", fmt.Errorf("access denied: path %q escapes root %q", reqPath, root)
+	}
+	return absFull, nil
+}
+
 type msg struct{}
 
 func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
-	if strings.HasPrefix(req.Path, ".") {
-		err = fmt.Errorf("no access in path {{%v}}", req.Path)
-		return
-	}
-	dir := filepath.Join(Root, req.Path)
-	if dir == "" {
-		dir = "."
+	dir, err := safePath(Root, req.Path)
+	if err != nil {
+		return nil, err
 	}
 	res = []*FileInfo{}
 	fs, err := os.ReadDir(dir)
@@ -91,7 +133,12 @@ func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
 	}
 	for _, file := range fs {
 		name := file.Name()
-		f := &FileInfo{Name: name, IsDir: file.IsDir()}
+		f := &FileInfo{Name: name, IsDir: file.IsDir(), Cdn: CDN}
+		if req.Path == "" || req.Path == "/" {
+			f.Path = name
+		} else {
+			f.Path = req.Path + "/" + name
+		}
 		if !file.IsDir() {
 			f.Ext = filepath.Ext(name)
 		}
@@ -101,28 +148,26 @@ func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
 }
 
 func (*msg) Mkdir(req struct{ Path string }) error {
-	if strings.HasPrefix(req.Path, ".") {
-		return fmt.Errorf("no access in path {{%v}}", req.Path)
+	dir, err := safePath(Root, req.Path)
+	if err != nil {
+		return err
 	}
-	if strings.HasPrefix(req.Path, "/") {
-		return fmt.Errorf("path:%v not startwith:/", req.Path)
-	}
-	if req.Path == "" {
-		return fmt.Errorf("path is empty")
-	}
-	dir := filepath.Join(Root, req.Path)
 	return os.MkdirAll(dir, 0777)
 }
 
 func (*msg) ReadFile(req struct{ Path string }) ([]byte, error) {
-	if strings.HasPrefix(req.Path, ".") {
-		return nil, fmt.Errorf("no access in path {{%v}}", req.Path)
+	path, err := safePath(Root, req.Path)
+	if err != nil {
+		return nil, err
 	}
-	return os.ReadFile(filepath.Join(Root, req.Path))
+	return os.ReadFile(path)
 }
 
 func (*msg) SaveFile(req *protocol.FileTransfer) (err error) {
-	path := filepath.Join(Root, req.FileName)
+	path, err := safePath(Root, req.FileName)
+	if err != nil {
+		return err
+	}
 	if req.Offset == 0 {
 		if _, err := os.Stat(path); err == nil {
 			return fmt.Errorf("file exist:%v", path)
@@ -151,24 +196,29 @@ type FileInfo struct {
 	Name  string
 	IsDir bool
 	Ext   string
+	Path  string `json:",omitempty"`
+	Cdn   string
 }
 
 func (f *FileInfo) String() string {
 	return fmt.Sprintf("%+v", *f)
 }
 
-func Server(secret string) {
+func Server(secret string) error {
 	fmt.Println("server secret:", secret)
 	s, err := crpc.NewServer(context.Background(), crpc.ServerOptions().SetSecret(secret))
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("new server: %w", err)
 	}
+
+	var addrs []string
 	for addr := range strings.SplitSeq(Uris, ",") {
-		addr := addr
-		go func() {
-			if err := s.Listen(addr); err != nil {
-				panic(err)
-			}
-		}()
+		addrs = append(addrs, addr)
 	}
+	go func() {
+		if err := s.Listen(addrs...); err != nil {
+			slog.Info("crpc listen error on", "addrs", addrs, "err", err)
+		}
+	}()
+	return nil
 }

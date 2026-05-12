@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件管理器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+body{background:#1e1e2e;color:rgba(255,255,255,0.85);height:100vh;display:flex;flex-direction:column;font-size:14px}
+.toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;flex-wrap:wrap}
+.btn{padding:6px 14px;border:none;border-radius:4px;cursor:pointer;background:rgba(255,255,255,0.1);color:white;font-size:13px;white-space:nowrap}
+.btn:hover{background:rgba(255,255,255,0.2)}
+.btn.primary{background:#4caf50;font-weight:bold}
+.btn.primary:hover{background:#45a049}
+.btn.danger{background:#e53935}
+.btn.danger:hover{background:#c62828}
+.btn.small{padding:4px 10px;font-size:12px}
+.breadcrumb{flex:1;font-size:14px;overflow:hidden;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.crumb{cursor:pointer;padding:2px 2px;border-radius:3px;color:rgba(255,255,255,0.7)}
+.crumb:hover{background:rgba(255,255,255,0.1);color:white}
+.crumb-sep{color:rgba(255,255,255,0.25);margin:0 1px}
+.grid{display:flex;flex-wrap:wrap;align-content:flex-start;flex:1;overflow-y:auto;padding:8px}
+.file-item{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;width:120px;height:140px;margin:8px;padding:8px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.03);transition:background 0.2s;overflow:hidden;position:relative}
+.file-item:hover{background:rgba(255,255,255,0.1)}
+.file-icon{font-size:48px;line-height:60px;height:60px;text-align:center}
+.file-thumb{width:80px;height:60px;object-fit:cover;border-radius:4px;display:block}
+.file-name{font-size:12px;text-align:center;word-break:break-all;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-top:4px;max-width:108px;line-height:1.3}
+.preview-btn{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:4px;padding:2px 6px;font-size:11px;cursor:pointer;display:none;z-index:10}
+.file-item:hover .preview-btn{display:block}
+.preview-btn:hover{background:rgba(0,0,0,0.8)}
+.msg{width:100%;text-align:center;padding:40px;color:rgba(255,255,255,0.3)}
+select{padding:6px 10px;border:none;border-radius:4px;background:rgba(255,255,255,0.1);color:white;font-size:13px;outline:none;cursor:pointer;max-width:160px}
+select option{background:#2a2a3e;color:white}
+input[type=text],input[type=password]{padding:8px 12px;border:none;border-radius:4px;background:rgba(255,255,255,0.9);outline:none;font-size:13px}
+.connect-panel{max-width:600px;margin:40px auto;padding:24px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center}
+.connect-panel h2{margin:0 0 16px;font-size:18px}
+.connect-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.connect-row input{flex:1;min-width:100px;padding:8px 12px}
+.history{margin-top:16px;text-align:left}
+.history-title{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:6px}
+.history-item{display:flex;align-items:center;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.7)}
+.history-item:hover{background:rgba(255,255,255,0.08)}
+.history-name{flex:1}
+.btn-del{border:none;background:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:12px;padding:2px 6px}
+.btn-del:hover{color:#e53935}
+.status{font-size:13px;color:#4caf50;margin-top:8px}
+.status.error{color:#e53935}
+.modal-overlay{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center}
+.modal-dialog{background:#2a2a3e;border-radius:8px;padding:20px;min-width:360px;max-height:80vh;display:flex;flex-direction:column}
+.modal-title{font-size:15px;margin-bottom:12px}
+.modal-input{width:100%;padding:8px 12px;border:none;border-radius:4px;background:rgba(255,255,255,0.1);color:white;font-size:14px;outline:none;box-sizing:border-box}
+.modal-input:focus{background:rgba(255,255,255,0.15)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.upload-list{overflow-y:auto;max-height:50vh;margin:8px 0}
+.upload-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.upload-row:last-child{border-bottom:none}
+.upload-row-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upload-row-size{font-size:11px;color:rgba(255,255,255,0.4);white-space:nowrap;margin-right:4px}
+.upload-row-progress{width:80px;flex-shrink:0}
+.upload-row-status{font-size:11px;width:36px;text-align:right;flex-shrink:0}
+.up{height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden}
+.up-f{height:100%;border-radius:2px;transition:width 0.2s}
+.up-done .up-f{background:#4caf50}
+.up-ing .up-f{background:#4caf50}
+.up-err .up-f{background:#e53935}
+.overall-bar{margin-bottom:8px}
+.overall-progress{height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden}
+.overall-fill{height:100%;background:#4caf50;border-radius:3px;transition:width 0.2s}
+.overall-pct{font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px;text-align:right}
+.viewer-overlay{position:fixed;inset:0;z-index:2500;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center}
+.viewer-dialog{width:85vw;height:85vh;display:flex;flex-direction:column;background:#1e1e2e;border-radius:8px;overflow:hidden}
+.viewer-header{display:flex;align-items:center;padding:8px 16px;background:rgba(255,255,255,0.05);flex-shrink:0}
+.viewer-title{flex:1;font-size:14px;color:rgba(255,255,255,0.8)}
+.viewer-close{border:none;background:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;padding:4px 8px}
+.viewer-close:hover{color:white}
+.viewer-body{flex:1;overflow:auto;padding:16px;display:flex;align-items:center;justify-content:center}
+.viewer-text{width:100%;height:100%;margin:0;font-family:monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all;color:rgba(255,255,255,0.85)}
+.viewer-img{max-width:100%;max-height:100%;display:block;margin:auto}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:6px;font-size:13px;z-index:3000;max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toast-error{background:#e53935;color:white}
+.toast-warn{background:#f9a825;color:#1e1e2e}
+.toast-info{background:#1e88e5;color:white}
+#fileInput{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const ICONS={
+'.txt':'📄','.md':'📝','.json':'📋','.log':'📋','.sh':'⚡','.go':'🔵','.py':'🐍','.js':'🟨',
+'.html':'🌐','.css':'🎨','.xml':'📋','.yaml':'📋','.jpg':'🖼','.jpeg':'🖼','.png':'🖼','.gif':'🖼','.svg':'🖼',
+'.mp3':'🎵','.wav':'🎵','.mp4':'🎬','.avi':'🎬','.mkv':'🎬',
+'.zip':'📦','.tar':'📦','.gz':'📦','.7z':'📦','.rar':'📦',
+'.pdf':'📕','.doc':'📘','.docx':'📘'
+};
+const textExts=['.txt','.md','.json','.xml','.yaml','.yml','.toml','.go','.py','.js','.ts','.css','.html','.sh','.log','.csv','.env','.conf','.ini','.properties'];
+const imgExts=['.png','.jpg','.jpeg','.gif','.svg','.bmp','.webp'];
+
+let paths=[];
+let servers=[];       // connected servers from backend
+let curSrv='';        // current server name
+let toastTimer=null;
+
+const HISTORY_KEY='filemgr_web_history';
+const TOKEN_KEY='filemgr_web_token';
+let sessionToken='';
+
+function fmtSize(n){
+if(n<1024)return n+'B';
+if(n<1048576)return (n/1024).toFixed(1)+'KB';
+return (n/1048576).toFixed(1)+'MB'
+}
+
+function escHtml(s){return String(s).replace(/[&<>"']/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m})}
+
+function showToast(msg,type){
+const el=document.getElementById('toast')||document.createElement('div');
+el.id='toast';el.className='toast toast-'+(type||'error');
+el.textContent=msg;el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:6px;font-size:13px;z-index:3000;max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+if(!el.parentNode)document.body.appendChild(el);
+if(toastTimer)clearTimeout(toastTimer);
+toastTimer=setTimeout(()=>{el.style.display='none'},4000)
+}
+
+function qs(key,val){
+const p=new URLSearchParams();
+if(sessionToken)p.set('_token',sessionToken);
+if(curSrv)p.set('s',curSrv);
+if(key)p.set(key,val);
+return p.toString()
+}
+
+async function api(url,opts){
+const sep=url.includes('?')?'&':'?';
+const u=sessionToken?url+sep+'_token='+encodeURIComponent(sessionToken):url;
+const res=await fetch(u,opts);
+if(!res.ok){const t=await res.text();throw new Error(t)}
+return res.json()
+}
+
+function fileURL(path,inline){
+return '/api/read?'+qs('path',path)+(inline?'&inline=1':'')
+}
+
+// ---- connect panel ----
+function renderConnect(){
+const app=document.getElementById('app');
+const h=loadHistory();
+app.innerHTML=`
+<div class="connect-panel">
+<h2>连接文件服务器</h2>
+<div class="connect-row">
+<input id="cName" placeholder="显示名" value="filemgr" style="min-width:80px">
+<input id="cAddr" placeholder="地址 (host:port)" value="" style="min-width:130px">
+<input id="cService" placeholder="服务名" value="filemgr" style="min-width:60px">
+<input id="cSecret" type="password" placeholder="密钥" style="min-width:80px">
+<button class="btn primary" id="cBtn">连接</button>
+</div>
+<div class="status" id="cStatus"></div>
+<div class="status" id="cStatus2" style="font-size:12px;color:rgba(255,255,255,0.3);margin-top:4px"></div>
+${h.length?`<div class="history"><div class="history-title">历史连接 (双击连接)</div>${h.map((item,i)=>'<div class="history-item" data-idx="'+i+'"><span class="history-name">'+escHtml(item.label)+'</span><button class="btn-del" data-idx="'+i+'">✕</button></div>').join('')}</div>`:''}
+</div>`;
+document.getElementById('cBtn').onclick=doConnect;
+document.querySelectorAll('.history-item').forEach(el=>{
+el.ondblclick=function(){const h=loadHistory();const item=h[+this.dataset.idx];if(item){document.getElementById('cName').value=item.name;document.getElementById('cAddr').value=item.addr;document.getElementById('cService').value=item.service||'filemgr';document.getElementById('cSecret').value=item.secret;doConnect()}};
+el.querySelector('.btn-del').onclick=function(e){e.stopPropagation();const h=loadHistory();h.splice(+this.parentElement.dataset.idx,1);saveHistory(h);renderConnect()}
+});
+document.getElementById('cAddr').focus()
+}
+
+function loadHistory(){try{return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]')}catch{return[]}}
+function saveHistory(h){localStorage.setItem(HISTORY_KEY,JSON.stringify(h))}
+function pushHistory(name,addr,secret,cdn,service){
+const h=loadHistory();
+const label=name+' @ '+addr;
+const filtered=h.filter(x=>x.label!==label);
+filtered.unshift({name,addr,secret,cdn:cdn||'',service:service||'filemgr',label});
+if(filtered.length>20)filtered.length=20;
+saveHistory(filtered)
+}
+
+async function doConnect(){
+const name=document.getElementById('cName').value.trim()||'filemgr';
+const addr=document.getElementById('cAddr').value.trim();
+const service=document.getElementById('cService').value.trim()||'filemgr';
+const secret=document.getElementById('cSecret').value;
+const st=document.getElementById('cStatus');
+const btn=document.getElementById('cBtn');
+if(!addr){st.textContent='地址不能为空';st.className='status error';return}
+st.textContent='连接中...';st.className='status';
+btn.disabled=true;btn.textContent='连接中...';
+try{
+const res=await api('/api/connect',{method:'POST',body:JSON.stringify({token:sessionToken,name,addr,secret,service})});
+pushHistory(name,addr,secret,'',service);
+await refreshServers();
+if(!curSrv&&servers.length>0)curSrv=servers[0].name;
+renderMain()
+}catch(e){st.textContent='连接失败: '+e.message;st.className='status error';btn.disabled=false;btn.textContent='连接'}
+}
+
+// ---- main view ----
+function renderMain(){
+const app=document.getElementById('app');
+const cdnSrv=servers.find(x=>x.name===curSrv);
+app.innerHTML=`
+<div class="toolbar">
+<button class="btn" id="btnUp">⬆</button>
+<select id="srvSelect">${servers.map(s=>'<option value="'+escHtml(s.name)+'"'+(s.name===curSrv?' selected':'')+'>'+escHtml(s.name+(s.service?' ['+s.service+']':''))+'</option>').join('')}</select>
+<button class="btn small" id="btnAddSrv">＋</button>
+<button class="btn small danger" id="btnDelSrv">－</button>
+<div class="breadcrumb" id="breadcrumb"><span class="crumb" data-idx="-1">📁</span></div>
+<button class="btn" id="btnMkdir">📁 新建</button>
+<button class="btn" id="btnUpload">📄 上传</button>
+</div>
+<div class="grid" id="grid"><div class="msg">加载中...</div></div>
+<input id="fileInput" type="file" multiple>
+<div id="mkdirModal" class="modal-overlay" style="display:none">
+<div class="modal-dialog"><div class="modal-title">新建文件夹</div>
+<input id="mkdirInput" class="modal-input" placeholder="文件夹名称">
+<div class="modal-actions"><button class="btn" id="mkdirCancel">取消</button><button class="btn primary" id="mkdirOk">确定</button></div></div></div>
+<div id="uploadModal" class="modal-overlay" style="display:none">
+<div class="modal-dialog" style="min-width:420px">
+<div class="modal-title" id="uploadTitle">上传文件</div>
+<div class="overall-bar"><div class="overall-progress"><div class="overall-fill" id="overallFill" style="width:0%"></div></div><div class="overall-pct" id="overallPct">0 / 0</div></div>
+<div class="upload-list" id="uploadList"></div>
+<div class="modal-actions"><button class="btn" id="uploadCloseBtn" style="display:none">关闭</button></div></div></div>
+<div id="viewerModal" class="viewer-overlay" style="display:none">
+<div class="viewer-dialog"><div class="viewer-header"><span class="viewer-title" id="viewerTitle"></span><button class="viewer-close" id="viewerClose">✕</button></div>
+<div class="viewer-body" id="viewerBody"></div></div></div>
+`;
+document.getElementById('srvSelect').onchange=function(){curSrv=this.value;paths=[];renderBread();loadFiles()};
+document.getElementById('btnAddSrv').onclick=function(){renderAddServer()};
+document.getElementById('btnDelSrv').onclick=async function(){if(!curSrv||!servers.find(x=>x.name===curSrv))return;try{await api('/api/disconnect',{method:'POST',body:JSON.stringify({token:sessionToken,name:curSrv})})}catch{}await refreshServers();if(servers.length===0){renderConnect();return}curSrv=servers[0].name;paths=[];renderMain()};
+document.getElementById('btnUp').onclick=goUp;
+document.getElementById('btnMkdir').onclick=showMkdir;
+document.getElementById('mkdirCancel').onclick=()=>document.getElementById('mkdirModal').style.display='none';
+document.getElementById('mkdirOk').onclick=doMkdir;
+document.getElementById('mkdirInput').onkeyup=e=>{if(e.key==='Enter')doMkdir()};
+document.getElementById('btnUpload').onclick=()=>document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange=e=>{upload(e.target.files);e.target.value=''};
+document.getElementById('uploadCloseBtn').onclick=()=>document.getElementById('uploadModal').style.display='none';
+document.getElementById('viewerClose').onclick=viewerClose;
+document.getElementById('viewerModal').onclick=function(e){if(e.target===this)viewerClose()};
+renderBread();loadFiles()
+}
+
+function renderAddServer(){
+const overlay=document.createElement('div');
+overlay.className='modal-overlay';overlay.style.cssText='position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center';
+overlay.innerHTML=`
+<div class="modal-dialog">
+<div class="modal-title">添加文件服务器</div>
+<input id="asName" class="modal-input" placeholder="显示名" value="filemgr" style="margin-bottom:8px">
+<input id="asAddr" class="modal-input" placeholder="地址 (host:port)" style="margin-bottom:8px">
+<input id="asService" class="modal-input" placeholder="crpc 服务名" value="filemgr" style="margin-bottom:8px">
+<input id="asSecret" class="modal-input" type="password" placeholder="密钥" style="margin-bottom:8px">
+<div class="modal-actions"><button class="btn" id="asCancel">取消</button><button class="btn primary" id="asOk">连接</button></div>
+<div class="status" id="asStatus"></div>
+</div>`;
+document.body.appendChild(overlay);
+overlay.querySelector('#asCancel').onclick=()=>overlay.remove();
+overlay.querySelector('#asOk').onclick=async function(){
+const name=overlay.querySelector('#asName').value.trim()||'filemgr';
+const addr=overlay.querySelector('#asAddr').value.trim();
+const service=overlay.querySelector('#asService').value.trim()||'filemgr';
+const secret=overlay.querySelector('#asSecret').value;
+if(!addr){overlay.querySelector('#asStatus').textContent='地址不能为空';return}
+overlay.querySelector('#asStatus').textContent='连接中...';
+try{
+const res=await api('/api/connect',{method:'POST',body:JSON.stringify({token:sessionToken,name,addr,secret,service})});
+pushHistory(name,addr,secret,'',service);
+overlay.remove();
+await refreshServers();
+curSrv=name;paths=[];renderMain()
+}catch(e){overlay.querySelector('#asStatus').textContent='连接失败: '+e.message}
+}
+}
+
+async function refreshServers(){
+const res=await api('/api/servers');
+servers=Array.isArray(res)?res:[];
+if(!curSrv||!servers.find(x=>x.name===curSrv)){
+curSrv=servers.length>0?servers[0].name:''
+}
+}
+
+function renderBread(){
+const el=document.getElementById('breadcrumb');
+let html='<span class="crumb" data-idx="-1">📁</span>';
+paths.forEach((p,i)=>html+='<span class="crumb-sep">/</span><span class="crumb" data-idx="'+i+'">'+escHtml(p)+'</span>');
+el.innerHTML=html;
+el.querySelectorAll('.crumb').forEach(c=>c.onclick=()=>jumpBread(+c.dataset.idx))
+}
+
+function destPath(){return paths.join('/')}
+
+async function loadFiles(){
+const grid=document.getElementById('grid');
+if(!grid)return;
+grid.innerHTML='<div class="msg">加载中...</div>';
+try{
+const p=destPath()||'/';
+const res=await api('/api/list?'+qs('path',p));
+grid.innerHTML='';
+if(!res||res.length===0){grid.innerHTML='<div class="msg">目录为空</div>';return}
+res.forEach(item=>{
+const div=document.createElement('div');
+div.className='file-item';
+const isImg=imgExts.includes((item.Ext||'').toLowerCase());
+let html;
+if(item.IsDir){
+html='<div class="file-icon">📁</div>'
+}else if(isImg){
+const url=fileURL(item.Path,true);
+html='<img class="file-thumb" src="'+escHtml(url)+'" loading="lazy" /><button class="preview-btn">🔍</button>'
+}else{
+html='<div class="file-icon">'+(ICONS[item.Ext]||'📄')+'</div>'
+}
+html+='<div class="file-name">'+escHtml(item.Name)+'</div>';
+div.innerHTML=html;
+if(isImg)div.querySelector('.preview-btn').onclick=e=>{e.stopPropagation();open(item)};
+div.ondblclick=()=>open(item);
+div.onclick=()=>select(item);
+grid.appendChild(div)
+})
+}catch(e){
+grid.innerHTML='<div class="msg">加载失败: '+escHtml(e.message)+'</div>'
+}
+}
+
+function jumpBread(i){
+if(i===-1)paths=[];else paths=paths.slice(0,i+1);
+renderBread();loadFiles()
+}
+
+function goUp(){
+if(paths.length===0){showToast('已在顶层目录','warn');return}
+paths.pop();renderBread();loadFiles()
+}
+
+function select(item){
+if(item.IsDir){paths.push(item.Name);renderBread();loadFiles()}
+}
+
+function viewerClose(){
+document.getElementById('viewerModal').style.display='none'
+}
+
+async function open(item){
+if(item.IsDir)return;
+const path=destPath()?destPath()+'/'+item.Name:item.Name;
+const ext=(item.Ext||'').toLowerCase();
+function previewURL(item,inline){
+if(item.Cdn)return item.Cdn+'/'+item.Path;
+return '/api/read?'+qs('path',item.Path)+(inline?'&inline=1':'')
+}
+
+if(textExts.includes(ext)){
+document.getElementById('viewerTitle').textContent=item.Name;
+document.getElementById('viewerBody').innerHTML='<pre class="viewer-text">加载中...</pre>';
+document.getElementById('viewerModal').style.display='';
+try{
+const r=await fetch(previewURL(item,false));
+if(!r.ok)throw new Error(await r.text());
+document.getElementById('viewerBody').innerHTML='<pre class="viewer-text">'+escHtml(await r.text())+'</pre>'
+}catch(e){document.getElementById('viewerBody').innerHTML='<pre class="viewer-text">读取失败: '+escHtml(e.message)+'</pre>'}
+}else if(imgExts.includes(ext)){
+document.getElementById('viewerTitle').textContent=item.Name;
+document.getElementById('viewerBody').innerHTML='<img class="viewer-img" src="'+escHtml(previewURL(item,true))+'" alt="" />';
+document.getElementById('viewerModal').style.display=''
+}else{
+const url=previewURL(item);
+const a=document.createElement('a');
+if(item.Cdn){a.href=url;a.target='_blank'}else{a.href=url;a.download=item.Name}
+document.body.appendChild(a);a.click();document.body.removeChild(a)
+}
+}
+
+function showMkdir(){
+document.getElementById('mkdirInput').value='';
+document.getElementById('mkdirModal').style.display='';
+setTimeout(()=>document.getElementById('mkdirInput').focus(),50)
+}
+
+async function doMkdir(){
+const name=document.getElementById('mkdirInput').value.trim();
+if(!name)return;
+document.getElementById('mkdirModal').style.display='none';
+const path=destPath()?destPath()+'/'+name:name;
+try{await api('/api/mkdir',{method:'POST',body:JSON.stringify({s:curSrv,path})});loadFiles()}
+catch(e){showToast('创建失败: '+e.message,'error')}
+}
+
+function upload(files){
+if(!files||files.length===0)return;
+const modal=document.getElementById('uploadModal');
+const list=document.getElementById('uploadList');
+const overall=document.getElementById('overallFill');
+const pct=document.getElementById('overallPct');
+document.getElementById('uploadCloseBtn').style.display='none';
+document.getElementById('uploadTitle').textContent='上传中...';
+list.innerHTML='';
+let totalBytes=0;
+const rows=[];
+for(const f of files){
+totalBytes+=f.size;
+const row=document.createElement('div');
+row.className='upload-row';
+row.innerHTML='<span class="upload-row-name">'+escHtml(f.name)+'</span><span class="upload-row-size">'+fmtSize(f.size)+'</span><div class="upload-row-progress"><div class="up up-ing"><div class="up-f" style="width:0%"></div></div></div><span class="upload-row-status">0%</span>';
+list.appendChild(row);
+rows.push({file:f,row:row,bar:row.querySelector('.up-f'),pctEl:row.querySelector('.upload-row-status'),done:false})
+}
+modal.style.display='';
+let overallSent=0;
+function upd(){const p=totalBytes>0?Math.round((overallSent/totalBytes)*100):0;overall.style.width=p+'%';let done=rows.filter(r=>r.done||r.err).length;pct.textContent=done+'/'+rows.length}
+upd();
+let idx=0;
+function next(){
+if(idx>=rows.length){document.getElementById('uploadTitle').textContent='上传完成';document.getElementById('uploadCloseBtn').style.display='';loadFiles();return}
+const r=rows[idx++];
+const form=new FormData();
+form.append('file',r.file);
+form.append('s',curSrv);
+form.append('dir',destPath());
+const xhr=new XMLHttpRequest();
+xhr.open('POST','/api/upload',true);
+xhr.upload.onprogress=e=>{if(!e.lengthComputable)return;const pp=e.total>0?Math.round((e.loaded/e.total)*100):0;r.bar.style.width=pp+'%';r.pctEl.textContent=pp+'%'};
+xhr.onload=function(){r.bar.style.width='100%';r.pctEl.textContent='100%';r.done=true;overallSent+=r.file.size;upd();next()};
+xhr.onerror=function(){r.bar.closest('.up').className='up up-err';r.pctEl.textContent='失败';r.err=true;overallSent+=r.file.size;upd();showToast('上传失败: '+r.file.name,'error');next()};
+xhr.send(form)
+}
+next()
+}
+
+// ---- init ----
+(async function init(){
+sessionToken=localStorage.getItem(TOKEN_KEY);
+if(!sessionToken){
+try{const r=await fetch('/api/token');const d=await r.json();sessionToken=d.token;localStorage.setItem(TOKEN_KEY,sessionToken)}catch{}
+}
+try{
+await refreshServers();
+if(servers.length>0)renderMain();
+else renderConnect()
+}catch(e){renderConnect()}
+})();
+</script>
+</body>
+</html>
