@@ -1,12 +1,12 @@
-# internal 共享模块
+# common 共享模块
 
 这个模块包含所有工具共享的代码和工具函数。
 
 ## 目录结构
 
 ```
-internal/
-├── go.mod              # internal 模块定义
+common/
+├── go.mod              # common 模块定义
 ├── version/            # 版本相关功能
 │   └── version.go      # 版本号获取函数
 ```
@@ -24,7 +24,7 @@ internal/
 #### 使用方法
 
 ```go
-import "github.com/ndsky1003/cmd/internal/version"
+import "github.com/ndsky1003/cmd/common/version"
 
 var Version = "dev"  // 可以通过 ldflags 注入
 
@@ -43,12 +43,12 @@ func main() {
 
 ## 如何添加新的共享功能
 
-1. 在 `internal/` 下创建新的包（如 `internal/utils`）
+1. 在 `common/` 下创建新的包（如 `common/utils`）
 2. 实现共享函数
 3. 在各工具的 `go.mod` 中添加引用：
    ```go
-   require github.com/ndsky1003/cmd/internal v0.0.0
-   replace github.com/ndsky1003/cmd/internal => ../internal
+   require github.com/ndsky1003/cmd/common v0.0.0
+   replace github.com/ndsky1003/cmd/common => ../common
    ```
 4. 在代码中 import 使用
 
@@ -56,8 +56,8 @@ func main() {
 
 ```
 launch     ──┐
-filemgr    ──┼──> internal/version
+filemgr    ──┼──> common/version
 structset  ──┘
 ```
 
-每个工具模块通过 `replace` 指令引用本地的 internal 模块。
+每个工具模块通过 `replace` 指令引用本地的 common 模块。
