@@ -10,7 +10,7 @@
 | `filemgr/` | `github.com/ndsky1003/cmd/filemgr` | 1.25.7 |
 | `filemgr_front/` | `github.com/ndsky1003/cmd/filemgr_front` | 1.24 |
 | `structset/` | `github.com/ndsky1003/cmd/structset` | 1.25.7 |
-| `internal/` | `github.com/ndsky1003/cmd/internal` | 1.22 |
+| `common/` | `github.com/ndsky1003/cmd/common` | 1.22 |
 
 无 `go.work`，构建必须在各工具目录内执行。
 
@@ -33,8 +33,8 @@ go build -ldflags="-s -w -X main.Version=v1.0.0" -o launch .
 各工具通过 `replace` 引用 `internal/`：
 
 ```
-require github.com/ndsky1003/cmd/internal v0.0.0
-replace github.com/ndsky1003/cmd/internal => ../internal
+require github.com/ndsky1003/cmd/common v0.0.0
+replace github.com/ndsky1003/cmd/common => ../common
 ```
 
 修改 `internal/` 后需在工具目录执行 `go mod tidy`。

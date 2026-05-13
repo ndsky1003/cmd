@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/ndsky1003/cmd/internal/version"
+	"github.com/ndsky1003/cmd/common/version"
 )
 
 var Version = "dev"

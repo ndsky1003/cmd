@@ -15,7 +15,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/ndsky1003/cmd/internal/version"
+	"github.com/ndsky1003/cmd/common/version"
 	"github.com/samber/lo"
 )
 

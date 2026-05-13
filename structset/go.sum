@@ -1,3 +1,5 @@
+github.com/ndsky1003/cmd/common v1.0.0 h1:3lfHFdmUwF1fq5GaMG19wc5FYfer8ZTAA//g+lAi3Xg=
+github.com/ndsky1003/cmd/common v1.0.0/go.mod h1:C0WmleMsoh3IoE5v8jKcPQGuBg+l3NEd+c+JL8ada20=
 github.com/samber/lo v1.53.0 h1:t975lj2py4kJPQ6haz1QMgtId2gtmfktACxIXArw3HM=
 github.com/samber/lo v1.53.0/go.mod h1:4+MXEGsJzbKGaUEQFKBq2xtfuznW9oz/WrgyzMzRoM0=
 golang.org/x/text v0.22.0 h1:bofq7m3/HAFvbF51jz3Q9wLg3jkvSPuiZu/pD1XwgtM=

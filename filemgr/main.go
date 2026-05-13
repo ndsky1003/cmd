@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ndsky1003/cmd/internal/version"
+	"github.com/ndsky1003/cmd/common/version"
 	"github.com/ndsky1003/crpc/v3"
 	"github.com/ndsky1003/crpc/v3/protocol"
 )
