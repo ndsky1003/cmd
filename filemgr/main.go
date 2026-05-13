@@ -48,7 +48,7 @@ var webFlag struct {
 
 func init() {
 	flag.BoolVar(&serverFlag.IsServer, "server", false, "是否启动server服务器")
-	flag.StringVar(&Secret, "serversecret", "", "secret key")
+	flag.StringVar(&Secret, "secret", "", "secret key")
 	flag.StringVar(&serverFlag.Uris, "suris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
 
 	flag.BoolVar(&clientFlag.IsClient, "client", false, "是否启动文件服务client")
@@ -70,7 +70,7 @@ func init() {
 	}
 
 	if *v {
-		fmt.Printf("filemgr version %s\n", version.GetVersion(Version))
+		fmt.Printf("%s\n", version.GetVersion(Version))
 		os.Exit(0)
 	}
 }

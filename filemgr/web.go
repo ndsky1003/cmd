@@ -17,6 +17,8 @@ import (
 
 	"github.com/ndsky1003/crpc/v3"
 	"github.com/ndsky1003/crpc/v3/protocol"
+	netclient "github.com/ndsky1003/net/v2/client"
+	netconn "github.com/ndsky1003/net/v2/conn"
 )
 
 //go:embed web_index.html
@@ -174,7 +176,14 @@ func handleConnect(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	peerName := "web_" + req.Token[:8]
-	client, err := crpc.Dial(context.Background(), peerName, req.Addr, crpc.ClientOptions().SetSecret(req.Secret))
+	client, err := crpc.Dial(context.Background(), peerName, req.Addr,
+		crpc.ClientOptions().SetSecret(req.Secret).
+			WithConn(func(o *netclient.Option) {
+				o.WithConn(func(oo *netconn.Option) {
+					oo.SetReadBufferLimitSize(500 * 1024 * 1024)
+				})
+			}),
+	)
 	if err != nil {
 		http.Error(rw, "connect failed: "+err.Error(), 400)
 		return
@@ -269,16 +278,16 @@ func handleMkdir(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, "method not allowed", 405)
 		return
 	}
+	token := tokenFrom(r)
 	var req struct {
-		Token string `json:"token"`
-		S     string `json:"s"`
-		Path  string `json:"path"`
+		S    string `json:"s"`
+		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(rw, err.Error(), 400)
 		return
 	}
-	s, err := getServer(req.Token, req.S)
+	s, err := getServer(token, req.S)
 	if err != nil {
 		http.Error(rw, err.Error(), 400)
 		return
@@ -295,7 +304,7 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, "method not allowed", 405)
 		return
 	}
-	if err := r.ParseMultipartForm(50 << 20); err != nil {
+	if err := r.ParseMultipartForm(200 << 20); err != nil {
 		http.Error(rw, err.Error(), 400)
 		return
 	}
@@ -313,19 +322,31 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
 	filename := header.Filename
 	if dir != "" {
 		filename = dir + "/" + filename
 	}
-	data, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(rw, err.Error(), 500)
-		return
-	}
-	ft := &protocol.FileTransfer{FileName: filename, Data: data, Offset: 0, IsFinish: true}
-	if err := call(s, "SaveFile", ft, nil); err != nil {
-		http.Error(rw, err.Error(), 400)
-		return
+
+	const chunkSize = 1024 * 1024
+	buf := make([]byte, chunkSize)
+	offset := int64(0)
+	for {
+		n, rerr := io.ReadFull(file, buf)
+		if n == 0 {
+			break
+		}
+		data := buf[:n]
+		isFinish := n < chunkSize || rerr != nil
+		ft := &protocol.FileTransfer{FileName: filename, Data: data, Offset: offset, IsFinish: isFinish}
+		if err := call(s, "SaveFile", ft, nil); err != nil {
+			http.Error(rw, err.Error(), 400)
+			return
+		}
+		offset += int64(n)
+		if isFinish {
+			break
+		}
 	}
 	writeJSON(rw, map[string]string{"ok": "saved"})
 }
@@ -343,6 +364,8 @@ var mimeTypes = map[string]string{
 	".gif": "image/gif", ".svg": "image/svg+xml", ".bmp": "image/bmp",
 	".webp": "image/webp", ".ico": "image/x-icon",
 	".pdf": "application/pdf",
+	".mp4": "video/mp4", ".webm": "video/webm", ".ogg": "video/ogg",
+	".mov": "video/quicktime", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
 }
 
 func handleRead(rw http.ResponseWriter, r *http.Request) {
@@ -354,11 +377,7 @@ func handleRead(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), 400)
 		return
 	}
-	var data []byte
-	if err := call(s, "ReadFile", struct{ Path string }{Path: path}, &data); err != nil {
-		http.Error(rw, err.Error(), 400)
-		return
-	}
+
 	ext := strings.ToLower(filepath.Ext(path))
 	inline := r.URL.Query().Get("inline") == "1"
 	if ct, ok := mimeTypes[ext]; ok && inline {
@@ -367,6 +386,14 @@ func handleRead(rw http.ResponseWriter, r *http.Request) {
 		name := filepath.Base(path)
 		rw.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 		rw.Header().Set("Content-Type", "application/octet-stream")
+	}
+
+	readCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	var data []byte
+	if err := s.client.Call(readCtx, s.Service, "crpc.ReadFile", struct{ Path string }{Path: path}, &data); err != nil {
+		http.Error(rw, err.Error(), 400)
+		return
 	}
 	rw.Write(data)
 }

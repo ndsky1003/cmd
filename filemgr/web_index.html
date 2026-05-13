@@ -25,9 +25,10 @@ body{background:#1e1e2e;color:rgba(255,255,255,0.85);height:100vh;display:flex;f
 .file-icon{font-size:48px;line-height:60px;height:60px;text-align:center}
 .file-thumb{width:80px;height:60px;object-fit:cover;border-radius:4px;display:block}
 .file-name{font-size:12px;text-align:center;word-break:break-all;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-top:4px;max-width:108px;line-height:1.3}
-.preview-btn{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:4px;padding:2px 6px;font-size:11px;cursor:pointer;display:none;z-index:10}
-.file-item:hover .preview-btn{display:block}
-.preview-btn:hover{background:rgba(0,0,0,0.8)}
+.item-overlay-top{position:absolute;top:0;left:0;right:0;height:22px;background:rgba(0,0,0,0.65);display:none;align-items:center;justify-content:center;border-radius:8px 8px 0 0;z-index:10;font-size:11px;color:rgba(255,255,255,0.9);cursor:pointer}
+.item-overlay-bot{position:absolute;bottom:0;left:0;right:0;height:22px;background:rgba(0,0,0,0.65);display:none;align-items:center;justify-content:center;border-radius:0 0 8px 8px;z-index:10;font-size:11px;color:rgba(255,255,255,0.9);cursor:pointer}
+.file-item:hover .item-overlay-top,.file-item:hover .item-overlay-bot{display:flex}
+.item-overlay-top:hover,.item-overlay-bot:hover{background:rgba(0,0,0,0.85)}
 .msg{width:100%;text-align:center;padding:40px;color:rgba(255,255,255,0.3)}
 select{padding:6px 10px;border:none;border-radius:4px;background:rgba(255,255,255,0.1);color:white;font-size:13px;outline:none;cursor:pointer;max-width:160px}
 select option{background:#2a2a3e;color:white}
@@ -90,12 +91,13 @@ input[type=text],input[type=password]{padding:8px 12px;border:none;border-radius
 const ICONS={
 '.txt':'📄','.md':'📝','.json':'📋','.log':'📋','.sh':'⚡','.go':'🔵','.py':'🐍','.js':'🟨',
 '.html':'🌐','.css':'🎨','.xml':'📋','.yaml':'📋','.jpg':'🖼','.jpeg':'🖼','.png':'🖼','.gif':'🖼','.svg':'🖼',
-'.mp3':'🎵','.wav':'🎵','.mp4':'🎬','.avi':'🎬','.mkv':'🎬',
+'.mp3':'🎵','.wav':'🎵','.mp4':'🎬','.webm':'🎬','.ogg':'🎬','.mov':'🎬','.avi':'🎬','.mkv':'🎬',
 '.zip':'📦','.tar':'📦','.gz':'📦','.7z':'📦','.rar':'📦',
 '.pdf':'📕','.doc':'📘','.docx':'📘'
 };
 const textExts=['.txt','.md','.json','.xml','.yaml','.yml','.toml','.go','.py','.js','.ts','.css','.html','.sh','.log','.csv','.env','.conf','.ini','.properties'];
 const imgExts=['.png','.jpg','.jpeg','.gif','.svg','.bmp','.webp'];
+const videoExts=['.mp4','.webm','.ogg','.mov','.avi','.mkv'];
 
 let paths=[];
 let servers=[];       // connected servers from backend
@@ -313,13 +315,18 @@ if(item.IsDir){
 html='<div class="file-icon">📁</div>'
 }else if(isImg){
 const url=fileURL(item.Path,true);
-html='<img class="file-thumb" src="'+escHtml(url)+'" loading="lazy" /><button class="preview-btn">🔍</button>'
+html='<img class="file-thumb" src="'+escHtml(url)+'" loading="lazy" />'
 }else{
 html='<div class="file-icon">'+(ICONS[item.Ext]||'📄')+'</div>'
 }
+if(!item.IsDir){
+const copyUrl=item.Cdn?item.Cdn+'/'+item.Path:window.location.origin+'/api/read?'+qs('path',item.Path);
+html+='<div class="item-overlay-top" data-action="preview">🔍 预览</div><div class="item-overlay-bot" data-url="'+escHtml(copyUrl)+'" data-action="copy">📋 复制地址</div>'
+}
 html+='<div class="file-name">'+escHtml(item.Name)+'</div>';
 div.innerHTML=html;
-if(isImg)div.querySelector('.preview-btn').onclick=e=>{e.stopPropagation();open(item)};
+div.querySelectorAll('[data-action=preview]').forEach(b=>b.onclick=function(e){e.stopPropagation();open(item)});
+div.querySelectorAll('[data-action=copy]').forEach(b=>b.onclick=function(e){e.stopPropagation();navigator.clipboard.writeText(this.dataset.url).then(()=>showToast('已复制地址','info')).catch(()=>showToast('复制失败','error'))});
 div.ondblclick=()=>open(item);
 div.onclick=()=>select(item);
 grid.appendChild(div)
@@ -368,6 +375,10 @@ document.getElementById('viewerBody').innerHTML='<pre class="viewer-text">'+escH
 }else if(imgExts.includes(ext)){
 document.getElementById('viewerTitle').textContent=item.Name;
 document.getElementById('viewerBody').innerHTML='<img class="viewer-img" src="'+escHtml(previewURL(item,true))+'" alt="" />';
+document.getElementById('viewerModal').style.display=''
+}else if(videoExts.includes(ext)){
+document.getElementById('viewerTitle').textContent=item.Name;
+document.getElementById('viewerBody').innerHTML='<video class="viewer-img" src="'+escHtml(previewURL(item,true))+'" controls autoplay style="max-width:100%;max-height:100%"></video>';
 document.getElementById('viewerModal').style.display=''
 }else{
 const url=previewURL(item);
@@ -424,7 +435,7 @@ form.append('file',r.file);
 form.append('s',curSrv);
 form.append('dir',destPath());
 const xhr=new XMLHttpRequest();
-xhr.open('POST','/api/upload',true);
+xhr.open('POST','/api/upload?_token='+encodeURIComponent(sessionToken),true);
 xhr.upload.onprogress=e=>{if(!e.lengthComputable)return;const pp=e.total>0?Math.round((e.loaded/e.total)*100):0;r.bar.style.width=pp+'%';r.pctEl.textContent=pp+'%'};
 xhr.onload=function(){r.bar.style.width='100%';r.pctEl.textContent='100%';r.done=true;overallSent+=r.file.size;upd();next()};
 xhr.onerror=function(){r.bar.closest('.up').className='up up-err';r.pctEl.textContent='失败';r.err=true;overallSent+=r.file.size;upd();showToast('上传失败: '+r.file.name,'error');next()};
