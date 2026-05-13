@@ -183,7 +183,7 @@ func handleConnect(rw http.ResponseWriter, r *http.Request) {
 	// wait for crpc ready (up to 5s)
 	ready := make(chan error, 1)
 	go func() {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			var res []any
 			if err := client.Call(context.Background(), req.Service, "crpc.ListDir", struct{ Path string }{Path: "/"}, &res); err == nil {
 				ready <- nil

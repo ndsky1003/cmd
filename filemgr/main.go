@@ -23,15 +23,7 @@ import (
 var (
 	// Version is set by build flags
 	Version = "dev"
-	Name    string
-	Urls    string
-	Root    string
-	CDN     string
-)
-
-var (
-	NoWeb   bool
-	WebAddr string
+	Secret  string
 )
 
 var serverFlag struct {
@@ -41,25 +33,42 @@ var serverFlag struct {
 }
 
 var clientFlag struct {
-	IsClient   bool
-	ClientName string
-	ClientUris string
+	IsClient bool
+	Secret   string
+	Name     string
+	Uris     string
+	Root     string
+	CDN      string
+}
+
+var webFlag struct {
+	IsWeb bool
+	Uris  string
 }
 
 func init() {
 	flag.BoolVar(&serverFlag.IsServer, "server", false, "是否启动server服务器")
-	flag.StringVar(&serverFlag.Secret, "serversecret", "", "secret key")
-	flag.StringVar(&serverFlag.Uris, "serveruris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
+	flag.StringVar(&Secret, "serversecret", "", "secret key")
+	flag.StringVar(&serverFlag.Uris, "suris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
 
-	flag.StringVar(&Name, "name", "filemgr", "server name, regist in crpc")
-	flag.StringVar(&Urls, "urls", "127.0.0.1:18083", "crpc address,eg:127.0.0.1:18083,localhost:18083")
-	flag.StringVar(&Root, "root", ".", "root dir")
-	flag.StringVar(&CDN, "cdn", "", "cdn base url for file access")
-	flag.BoolVar(&NoWeb, "noweb", false, "disable web ui")
-	flag.StringVar(&WebAddr, "web", ":18084", "web ui listen address")
+	flag.BoolVar(&clientFlag.IsClient, "client", false, "是否启动文件服务client")
+	flag.StringVar(&clientFlag.Name, "cname", "filemgr", "service name, regist in crpc")
+	flag.StringVar(&clientFlag.Uris, "curis", "127.0.0.1:18083", "client dail uri,eg:127.0.0.1:18083,localhost:18083")
+	flag.StringVar(&clientFlag.Root, "root", ".", "root dir")
+	flag.StringVar(&clientFlag.CDN, "cdn", "", "cdn base url for file access.eg:https://cdn.example.com")
+
+	flag.BoolVar(&webFlag.IsWeb, "web", false, "是否web ui")
+	flag.StringVar(&webFlag.Uris, "wuris", ":18084", "web ui listen address,eg:127.0.0.1:18084,localhost:18084")
+
 	v := flag.Bool("v", false, "print version information and exit")
 	flag.BoolVar(v, "version", false, "same as -v")
 	flag.Parse()
+
+	if Secret != "" {
+		serverFlag.Secret = Secret
+		clientFlag.Secret = Secret
+	}
+
 	if *v {
 		fmt.Printf("filemgr version %s\n", version.GetVersion(Version))
 		os.Exit(0)
@@ -67,21 +76,24 @@ func init() {
 }
 
 func main() {
+	if (serverFlag.IsServer || clientFlag.IsClient) && Secret == "" {
+		randstr := time.Now().UnixNano()
+		hash := md5.Sum(fmt.Appendf([]byte{}, "%d", randstr))
+		Secret = hex.EncodeToString(hash[:])
+		serverFlag.Secret = Secret
+		clientFlag.Secret = Secret
+
+	}
 	if serverFlag.IsServer {
-		if serverFlag.Secret == "" {
-			randstr := time.Now().UnixNano()
-			hash := md5.Sum(fmt.Appendf([]byte{}, "%d", randstr))
-			serverFlag.Secret = hex.EncodeToString(hash[:])
-		}
 		if err := Server(serverFlag.Secret); err != nil {
 			panic(fmt.Errorf("crpc server error:%v", err))
 		}
 	}
-	if Urls != "" {
-		urls := strings.SplitSeq(Urls, ",")
+	if clientFlag.IsClient {
+		urls := strings.SplitSeq(clientFlag.Uris, ",")
 		for url := range urls {
-			fmt.Println("Dial:", url, Name)
-			tmpclient, err := crpc.Dial(context.Background(), Name, url, crpc.ClientOptions().SetSecret(Secret))
+			fmt.Println("Dial:", url, clientFlag.Name)
+			tmpclient, err := crpc.Dial(context.Background(), clientFlag.Name, url, crpc.ClientOptions().SetSecret(Secret))
 			if err != nil {
 				fmt.Println("crpc dial error:", err)
 				continue
@@ -92,10 +104,14 @@ func main() {
 			}
 		}
 	}
-	if !NoWeb {
-		if err := startWebServer(WebAddr); err != nil {
+
+	if webFlag.IsWeb {
+		if err := startWebServer(webFlag.Uris); err != nil {
 			fmt.Println("web ui error:", err)
 		}
+	}
+	if !(serverFlag.IsServer || clientFlag.IsClient || webFlag.IsWeb) {
+		panic("尚未需要启动的任何服务")
 	}
 	select {}
 }
@@ -122,7 +138,7 @@ func safePath(root, reqPath string) (string, error) {
 type msg struct{}
 
 func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
-	dir, err := safePath(Root, req.Path)
+	dir, err := safePath(clientFlag.Root, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +149,7 @@ func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
 	}
 	for _, file := range fs {
 		name := file.Name()
-		f := &FileInfo{Name: name, IsDir: file.IsDir(), Cdn: CDN}
+		f := &FileInfo{Name: name, IsDir: file.IsDir(), Cdn: clientFlag.CDN}
 		if req.Path == "" || req.Path == "/" {
 			f.Path = name
 		} else {
@@ -148,7 +164,7 @@ func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
 }
 
 func (*msg) Mkdir(req struct{ Path string }) error {
-	dir, err := safePath(Root, req.Path)
+	dir, err := safePath(clientFlag.Root, req.Path)
 	if err != nil {
 		return err
 	}
@@ -156,7 +172,7 @@ func (*msg) Mkdir(req struct{ Path string }) error {
 }
 
 func (*msg) ReadFile(req struct{ Path string }) ([]byte, error) {
-	path, err := safePath(Root, req.Path)
+	path, err := safePath(clientFlag.Root, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +180,7 @@ func (*msg) ReadFile(req struct{ Path string }) ([]byte, error) {
 }
 
 func (*msg) SaveFile(req *protocol.FileTransfer) (err error) {
-	path, err := safePath(Root, req.FileName)
+	path, err := safePath(clientFlag.Root, req.FileName)
 	if err != nil {
 		return err
 	}
@@ -212,7 +228,7 @@ func Server(secret string) error {
 	}
 
 	var addrs []string
-	for addr := range strings.SplitSeq(Uris, ",") {
+	for addr := range strings.SplitSeq(serverFlag.Uris, ",") {
 		addrs = append(addrs, addr)
 	}
 	go func() {
