@@ -337,9 +337,6 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 		filename = dir + "/" + filename
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
-
 	const chunkSize = 1024 * 1024
 	buf := make([]byte, chunkSize)
 	offset := int64(0)
@@ -353,6 +350,8 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 		offset += int64(n)
 		ft := &protocol.FileTransfer{FileName: filename, Data: data, Offset: offset - int64(n), IsFinish: false}
 		slog.Info("call", "filename", ft.FileName)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft, crpc.ClientOptions().SetReqCoderT(coder.Msgp)); err != nil {
 			http.Error(rw, err.Error(), 400)
 			return
@@ -366,12 +365,14 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("1")
-	// ft := &protocol.FileTransfer{FileName: filename, Offset: offset, IsFinish: true}
-	// if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft, nil); err != nil {
-	// 	slog.Info("2", "err", err)
-	// 	http.Error(rw, err.Error(), 400)
-	// 	return
-	// }
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ft := &protocol.FileTransfer{FileName: filename, Offset: offset, IsFinish: true}
+	if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft, nil); err != nil {
+		slog.Info("2", "err", err)
+		http.Error(rw, err.Error(), 400)
+		return
+	}
 	slog.Info("3")
 
 	writeJSON(rw, map[string]string{"ok": "saved"})
