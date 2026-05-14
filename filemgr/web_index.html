@@ -116,6 +116,14 @@ return (n/1048576).toFixed(1)+'MB'
 
 function escHtml(s){return String(s).replace(/[&<>"']/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m})}
 
+function copyText(text){
+const ta=document.createElement('textarea');
+ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+document.body.appendChild(ta);ta.select();
+try{document.execCommand('copy');showToast('已复制地址','info')}catch{showToast('复制失败','error')}
+document.body.removeChild(ta)
+}
+
 function showToast(msg,type){
 const el=document.getElementById('toast')||document.createElement('div');
 el.id='toast';el.className='toast toast-'+(type||'error');
@@ -326,7 +334,7 @@ html+='<div class="item-overlay-top" data-action="preview">🔍 预览</div><div
 html+='<div class="file-name">'+escHtml(item.Name)+'</div>';
 div.innerHTML=html;
 div.querySelectorAll('[data-action=preview]').forEach(b=>b.onclick=function(e){e.stopPropagation();open(item)});
-div.querySelectorAll('[data-action=copy]').forEach(b=>b.onclick=function(e){e.stopPropagation();navigator.clipboard.writeText(this.dataset.url).then(()=>showToast('已复制地址','info')).catch(()=>showToast('复制失败','error'))});
+div.querySelectorAll('[data-action=copy]').forEach(b=>b.onclick=function(e){e.stopPropagation();copyText(this.dataset.url)});
 div.ondblclick=()=>open(item);
 div.onclick=()=>select(item);
 grid.appendChild(div)
@@ -404,44 +412,56 @@ catch(e){showToast('创建失败: '+e.message,'error')}
 }
 
 function upload(files){
-if(!files||files.length===0)return;
-const modal=document.getElementById('uploadModal');
-const list=document.getElementById('uploadList');
-const overall=document.getElementById('overallFill');
-const pct=document.getElementById('overallPct');
-document.getElementById('uploadCloseBtn').style.display='none';
-document.getElementById('uploadTitle').textContent='上传中...';
-list.innerHTML='';
-let totalBytes=0;
-const rows=[];
-for(const f of files){
-totalBytes+=f.size;
-const row=document.createElement('div');
-row.className='upload-row';
-row.innerHTML='<span class="upload-row-name">'+escHtml(f.name)+'</span><span class="upload-row-size">'+fmtSize(f.size)+'</span><div class="upload-row-progress"><div class="up up-ing"><div class="up-f" style="width:0%"></div></div></div><span class="upload-row-status">0%</span>';
-list.appendChild(row);
-rows.push({file:f,row:row,bar:row.querySelector('.up-f'),pctEl:row.querySelector('.upload-row-status'),done:false})
-}
-modal.style.display='';
-let overallSent=0;
-function upd(){const p=totalBytes>0?Math.round((overallSent/totalBytes)*100):0;overall.style.width=p+'%';let done=rows.filter(r=>r.done||r.err).length;pct.textContent=done+'/'+rows.length}
-upd();
-let idx=0;
-function next(){
-if(idx>=rows.length){document.getElementById('uploadTitle').textContent='上传完成';document.getElementById('uploadCloseBtn').style.display='';loadFiles();return}
-const r=rows[idx++];
-const form=new FormData();
-form.append('file',r.file);
-form.append('s',curSrv);
-form.append('dir',destPath());
-const xhr=new XMLHttpRequest();
-xhr.open('POST','/api/upload?_token='+encodeURIComponent(sessionToken),true);
-xhr.upload.onprogress=e=>{if(!e.lengthComputable)return;const pp=e.total>0?Math.round((e.loaded/e.total)*100):0;r.bar.style.width=pp+'%';r.pctEl.textContent=pp+'%'};
-xhr.onload=function(){r.bar.style.width='100%';r.pctEl.textContent='100%';r.done=true;overallSent+=r.file.size;upd();next()};
-xhr.onerror=function(){r.bar.closest('.up').className='up up-err';r.pctEl.textContent='失败';r.err=true;overallSent+=r.file.size;upd();showToast('上传失败: '+r.file.name,'error');next()};
-xhr.send(form)
-}
-next()
+	if(!files||files.length===0)return;
+	const modal=document.getElementById('uploadModal');
+	const list=document.getElementById('uploadList');
+	const overall=document.getElementById('overallFill');
+	const pct=document.getElementById('overallPct');
+	document.getElementById('uploadCloseBtn').style.display='none';
+	document.getElementById('uploadTitle').textContent='上传中...';
+	list.innerHTML='';
+	let totalBytes=0;
+	const rows=[];
+	for(const f of files){
+		totalBytes+=f.size;
+		const row=document.createElement('div');
+		row.className='upload-row';
+		row.innerHTML='<span class="upload-row-name">'+escHtml(f.name)+'</span><span class="upload-row-size">'+fmtSize(f.size)+'</span><div class="upload-row-progress"><div class="up up-ing"><div class="up-f" style="width:0%"></div></div></div><span class="upload-row-status">0%</span>';
+		list.appendChild(row);
+		rows.push({file:f,row:row,bar:row.querySelector('.up-f'),pctEl:row.querySelector('.upload-row-status'),done:false,err:false})
+	}
+	modal.style.display='';
+	let overallSent=0;
+	let active=0;
+	const maxConcurrent=10;
+	let completed=0;
+	const queue=rows.slice();
+	function upd(){const p=totalBytes>0?Math.round((overallSent/totalBytes)*100):0;overall.style.width=p+'%';pct.textContent=completed+'/'+rows.length}
+	upd();
+	function doUpload(r){
+		const form=new FormData();
+		form.append('file',r.file);
+		form.append('s',curSrv);
+		form.append('dir',destPath());
+		const xhr=new XMLHttpRequest();
+		xhr.open('POST','/api/upload?_token='+encodeURIComponent(sessionToken),true);
+		xhr.upload.onprogress=e=>{if(!e.lengthComputable)return;const pp=e.total>0?Math.round((e.loaded/e.total)*100):0;r.bar.style.width=pp+'%';r.pctEl.textContent=pp+'%'};
+		xhr.onload=function(){r.bar.style.width='100%';r.pctEl.textContent='100%';r.done=true;active--;completed++;overallSent+=r.file.size;upd();schedule()};
+		xhr.onerror=function(){r.bar.closest('.up').className='up up-err';r.pctEl.textContent='失败';r.err=true;active--;completed++;overallSent+=r.file.size;upd();showToast('上传失败: '+r.file.name,'error');schedule()};
+		xhr.send(form)
+	}
+	function schedule(){
+		while(active<maxConcurrent&&queue.length>0){
+			active++;
+			doUpload(queue.shift())
+		}
+		if(completed===rows.length){
+			document.getElementById('uploadTitle').textContent='上传完成';
+			document.getElementById('uploadCloseBtn').style.display='';
+			loadFiles()
+		}
+	}
+	schedule()
 }
 
 // ---- init ----

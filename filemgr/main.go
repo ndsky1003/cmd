@@ -47,6 +47,23 @@ var webFlag struct {
 }
 
 func init() {
+	// 1. 创建带 AddSource: true 的选项
+	opts := &slog.HandlerOptions{
+		AddSource: true, // 启用源文件和行号
+		Level:     slog.LevelDebug,
+	}
+
+	// 2. 用 TextHandler 输出（key=value 格式）
+	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
+	// 或 JSONHandler
+	// logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
+
+	// 3. 设置为全局默认 logger
+	slog.SetDefault(logger)
+}
+
+func init() {
+
 	flag.BoolVar(&serverFlag.IsServer, "server", false, "是否启动server服务器")
 	flag.StringVar(&Secret, "secret", "", "secret key")
 	flag.StringVar(&serverFlag.Uris, "suris", ":18083", "server listen uri.eg:127.0.0.1:18083,192.168.2.2:18083")
@@ -138,6 +155,10 @@ func safePath(root, reqPath string) (string, error) {
 type msg struct{}
 
 func (*msg) ListDir(req struct{ Path string }) (res []*FileInfo, err error) {
+	slog.Info("list", "path", req.Path)
+	defer func() {
+		slog.Info("list defer", "path", req.Path)
+	}()
 	dir, err := safePath(clientFlag.Root, req.Path)
 	if err != nil {
 		return nil, err
@@ -180,22 +201,15 @@ func (*msg) ReadFile(req struct{ Path string }) ([]byte, error) {
 }
 
 func (*msg) SaveFile(req *protocol.FileTransfer) (err error) {
+	slog.Info("SaveFile", "req", req.FileName, "length", len(req.Data))
+	defer func() {
+		slog.Info("SaveFile defer", "req", req.FileName, "length", len(req.Data))
+	}()
 	path, err := safePath(clientFlag.Root, req.FileName)
 	if err != nil {
 		return err
 	}
-	if req.Offset == 0 {
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("file exist:%v", path)
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-	}
-	flag := os.O_WRONLY | os.O_CREATE
-	if req.Offset > 0 {
-		flag |= os.O_APPEND
-	}
-	f, err := os.OpenFile(path, flag, 0644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -204,7 +218,9 @@ func (*msg) SaveFile(req *protocol.FileTransfer) (err error) {
 			err = cerr
 		}
 	}()
-	_, err = f.Write(req.Data)
+	if len(req.Data) > 0 {
+		_, err = f.WriteAt(req.Data, req.Offset)
+	}
 	return err
 }
 

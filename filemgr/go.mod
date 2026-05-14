@@ -20,3 +20,5 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 )
+
+replace github.com/ndsky1003/crpc/v3 => ../../crpc

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ndsky1003/crpc/v3"
+	"github.com/ndsky1003/crpc/v3/coder"
 	"github.com/ndsky1003/crpc/v3/protocol"
 	netclient "github.com/ndsky1003/net/v2/client"
 	netconn "github.com/ndsky1003/net/v2/conn"
@@ -181,6 +183,9 @@ func handleConnect(rw http.ResponseWriter, r *http.Request) {
 			WithConn(func(o *netclient.Option) {
 				o.WithConn(func(oo *netconn.Option) {
 					oo.SetReadBufferLimitSize(500 * 1024 * 1024)
+					oo.SetWriteTimeout(60 * time.Second)
+					oo.SetSendChanTimeout(60 * time.Second)
+					oo.SetHeartInterval(15 * time.Second)
 				})
 			}),
 	)
@@ -220,6 +225,10 @@ func handleConnect(rw http.ResponseWriter, r *http.Request) {
 	}
 	m := sessionMap(req.Token)
 	mu.Lock()
+	if s, ok := m[req.Name]; ok {
+		s.client.Close()
+		delete(m, req.Name)
+	}
 	m[req.Name] = s
 	mu.Unlock()
 	writeJSON(rw, map[string]string{"ok": "connected", "name": req.Name})
@@ -328,26 +337,43 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 		filename = dir + "/" + filename
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
 	const chunkSize = 1024 * 1024
 	buf := make([]byte, chunkSize)
 	offset := int64(0)
+	bytesSincePause := int64(0)
 	for {
-		n, rerr := io.ReadFull(file, buf)
+		n, _ := io.ReadFull(file, buf)
 		if n == 0 {
 			break
 		}
 		data := buf[:n]
-		isFinish := n < chunkSize || rerr != nil
-		ft := &protocol.FileTransfer{FileName: filename, Data: data, Offset: offset, IsFinish: isFinish}
-		if err := call(s, "SaveFile", ft, nil); err != nil {
+		offset += int64(n)
+		ft := &protocol.FileTransfer{FileName: filename, Data: data, Offset: offset - int64(n), IsFinish: false}
+		slog.Info("call", "filename", ft.FileName)
+		if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft, crpc.ClientOptions().SetReqCoderT(coder.Msgp)); err != nil {
 			http.Error(rw, err.Error(), 400)
 			return
 		}
-		offset += int64(n)
-		if isFinish {
-			break
+		slog.Info("call after", "filename", ft.FileName)
+		bytesSincePause += int64(n)
+		if bytesSincePause >= 16*1024*1024 {
+			time.Sleep(200 * time.Millisecond)
+			bytesSincePause = 0
 		}
 	}
+
+	slog.Info("1")
+	// ft := &protocol.FileTransfer{FileName: filename, Offset: offset, IsFinish: true}
+	// if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft, nil); err != nil {
+	// 	slog.Info("2", "err", err)
+	// 	http.Error(rw, err.Error(), 400)
+	// 	return
+	// }
+	slog.Info("3")
+
 	writeJSON(rw, map[string]string{"ok": "saved"})
 }
 
