@@ -60,6 +60,7 @@ func init() {
 
 	// 3. 设置为全局默认 logger
 	slog.SetDefault(logger)
+
 }
 
 func init() {

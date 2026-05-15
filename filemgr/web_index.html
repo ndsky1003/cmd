@@ -322,8 +322,8 @@ let html;
 if(item.IsDir){
 html='<div class="file-icon">📁</div>'
 }else if(isImg){
-const url=fileURL(item.Path,true);
-html='<img class="file-thumb" src="'+escHtml(url)+'" loading="lazy" />'
+            const url=item.Cdn?item.Cdn+'/'+item.Path:fileURL(item.Path,true);
+            html='<img class="file-thumb" src="'+escHtml(url)+'" loading="lazy" />'
 }else{
 html='<div class="file-icon">'+(ICONS[item.Ext]||'📄')+'</div>'
 }

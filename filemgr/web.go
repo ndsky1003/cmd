@@ -349,14 +349,16 @@ func handleUpload(rw http.ResponseWriter, r *http.Request) {
 		data := buf[:n]
 		offset += int64(n)
 		ft := &protocol.FileTransfer{FileName: filename, Data: data, Offset: offset - int64(n), IsFinish: false}
-		slog.Info("call", "filename", ft.FileName)
+		slog.Info("call", "filename", ft.FileName, "offset", ft.Offset)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft, crpc.ClientOptions().SetReqCoderT(coder.Msgp)); err != nil {
+		if err := s.client.Call(ctx, s.Service, "crpc.SaveFile", ft,
+			crpc.ClientOptions().SetReqCoderT(coder.Msgp).
+				SetDebug(true)); err != nil {
 			http.Error(rw, err.Error(), 400)
 			return
 		}
-		slog.Info("call after", "filename", ft.FileName)
+		slog.Info("call after", "filename", ft.FileName, "offset", ft.Offset)
 		bytesSincePause += int64(n)
 		if bytesSincePause >= 16*1024*1024 {
 			time.Sleep(200 * time.Millisecond)
