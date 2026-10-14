@@ -2,7 +2,7 @@ package {{.PackageName}}
 
 import (
 	"errors"
-{{ if or $.IsBsonM $.IsIncM $.IsJsonM $.IsBsonD $.IsIncD }}
+{{ if or $.IsBsonM $.IsIncM $.IsBsonD $.IsIncD }}
 	"go.mongodb.org/mongo-driver/bson"
 {{- end }}
 )
@@ -23,27 +23,27 @@ var (
 {{- end }}
 {{ if $.IsJsonM}}
 // Set{{.StructName}} 指定的值,upM
-func (this *{{.StructName}}) GenJsonM(keys []string) (bson.M, error) {
+func (this *{{.StructName}}) GenJsonM(keys []string) map[string]any {
+	m := map[string]any{}
     if this == nil {
-        return nil, errors.New("receiver is nil")
+        return m
     }
-	json_M := bson.M{}
 	for _, key := range keys {
 		switch key {
         {{- range .Fields }}
         {{- if ne .JsonTagValue "-" }}
 		case "{{.TagValue}}":
-		    json_M["{{.JsonTagValue}}"] = this.{{.Name}}
+		    m["{{.JsonTagValue}}"] = this.{{.Name}}
         {{- end }}
         {{- end }}
 		}
 	}
-    return json_M, nil
+    return m
 }
 {{- end }}
 {{ if $.IsBsonM}}
 // Set{{.StructName}} 指定的值,bson.M
-func (this *{{.StructName}}) GenBsonM(keys []string) (bson.M, error) {
+func (this *{{.StructName}}) GenBsonM(keys ...string) (bson.M, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }
@@ -63,7 +63,7 @@ func (this *{{.StructName}}) GenBsonM(keys []string) (bson.M, error) {
 {{- end }}
 {{ if $.IsIncM}}
 // Set{{.StructName}} 指定的值,incM
-func (this *{{.StructName}}) GenIncM(keys []string) (bson.M, error) {
+func (this *{{.StructName}}) GenIncM(keys ...string) (bson.M, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }
@@ -88,7 +88,7 @@ func (this *{{.StructName}}) GenIncM(keys []string) (bson.M, error) {
 
 {{ if $.IsBsonD}}
 // Set{{.StructName}} 指定的值,bson.D
-func (this *{{.StructName}}) GenBsonD(keys []string) (bson.D, error) {
+func (this *{{.StructName}}) GenBsonD(keys ...string) (bson.D, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }
@@ -108,7 +108,7 @@ func (this *{{.StructName}}) GenBsonD(keys []string) (bson.D, error) {
 {{- end }}
 {{ if $.IsIncD}}
 // Set{{.StructName}} 指定的值,incD
-func (this *{{.StructName}}) GenIncD(keys []string) (bson.D, error) {
+func (this *{{.StructName}}) GenIncD(keys ...string) (bson.D, error) {
     if this == nil {
         return nil, errors.New("receiver is nil")
     }

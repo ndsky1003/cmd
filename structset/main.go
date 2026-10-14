@@ -108,14 +108,14 @@ func formatGoFile(filePath string) error {
 }
 
 func main() {
-	flag.String("useage", "useage", "structset -k=false  --sub=ccc --tagname=structset")
+	flag.String("usage", "usage", "structset -k=false  --sub=ccc --tagname=structset")
 	attr := flag.Bool("attr", false, "显示可以可设置的属性")
 	flag.StringVar(&file_path, "f", "", "需要解析的文件")
 	flag.StringVar(&out_path, "o", "", "输出的新文件")
 	flag.StringVar(&suffix, "sub", "_struct_gen", "输出的新文件的后缀")
 	flag.StringVar(&tag_name, "tagname", "structset", "提取的tag名称.eg:json")
 	flag.BoolVar(&fileStructData.IsKey, "k", true, "是否生成结构体的keys常量")
-	flag.BoolVar(&fileStructData.IsJsonM, "jm", true, "是否生成结构体的bson.M")
+	flag.BoolVar(&fileStructData.IsJsonM, "jm", true, "是否生成结构体的json.M")
 	flag.BoolVar(&fileStructData.IsBsonM, "bm", true, "是否生成结构体的bson.M,$set")
 	flag.BoolVar(&fileStructData.IsIncM, "im", true, "是否生成结构体的bson.M,$inc")
 	flag.BoolVar(&fileStructData.IsBsonD, "bd", true, "是否生成结构体的bson.D,$set")
@@ -325,6 +325,7 @@ type FileStructData struct {
 	PackageName string
 	StructDatas []StructData
 	IsKey       bool
+	IsAllKey    bool
 	IsJsonM     bool
 	IsBsonM     bool //bson.M
 	IsIncM      bool //bson.M
@@ -335,23 +336,6 @@ type FileStructData struct {
 	IsAdd       bool
 	IsCopy      bool
 }
-
-// func getStructName(expr ast.Expr) string {
-// 	switch t := expr.(type) {
-// 	case *ast.Ident: // 基本类型或自定义类型
-// 		return t.Name
-// 	case *ast.SelectorExpr: // 包名.类型
-// 		return fmt.Sprintf("%s.%s", t.X, t.Sel.Name)
-// 	case *ast.ArrayType: // 数组类型
-// 		return getStructName(t.Elt)
-// 	case *ast.MapType: // map 类型
-// 		return getStructName(t.Key)
-// 	case *ast.StarExpr: // 指针类型
-// 		return getStructName(t.X)
-// 	default:
-// 		return fmt.Sprintf("%T", expr) // 其他类型
-// 	}
-// }
 
 // 获取字段类型的字符串表示
 func getFieldType(expr ast.Expr) string {

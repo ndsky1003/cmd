@@ -70,7 +70,7 @@ Go 结构体代码生成工具，自动生成 Set、Inc、Add、Copy 等方法�
 **功能特性：**
 - 生成 `Set()` 方法设置字段值
 - 生成 `Inc()` 方法递增数值字段
-- 生成 `Add()` 方法添加到切片/Map
+- 生成 `Add()` 方法累加数值字段
 - 生成 `Copy()` 方法复制结构体
 - 支持自定义标签控制生成行为
 - 字段级别属性：`inc`, `noinc`, `add`, `noadd`, `copy`, `nocopy`
@@ -96,12 +96,18 @@ structset -v
 ```go
 //go:generate structset
 type User struct {
-    Name     string `structset:"copy"`
-    Age      int    `structset:"inc,add"`
-    Email    string `structset:"nocopy"`
-    Tags     []string `structset:"add"`
+    Name  string   `structset:"name,copy"`
+    Age   int      `structset:"age,inc,add,copy"`
+    Email string   `structset:"email,nocopy"`
+    Tags  []string `structset:"tags,copy"`
 }
 ```
+
+`structset` 标签格式为 `structset:"<key>,<attr>..."`：
+
+- `key`（第一段）是字段标识名，用于生成 key 常量（如 `User_Name`）以及 `Set`/`Inc`/`Copy` 的 `keys` 参数；留空（如 `structset:",copy"`）则默认使用字段名。
+- `attr` 属性控制生成行为：`inc`/`noinc`、`add`/`noadd`、`copy`/`nocopy`。
+- 整个标签值为 `-` 时忽略该字段。
 
 ## 🚀 快速开始
 

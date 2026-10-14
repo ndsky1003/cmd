@@ -2,17 +2,14 @@
 
 ## 多模块结构
 
-无根 `go.mod`，5 个独立 Go module：
+无根 `go.mod`、无 `go.work`，构建必须在各工具目录内执行。共 4 个独立 Go module：
 
 | 目录 | module | Go 版本 |
 |------|--------|---------|
 | `launch/` | `github.com/ndsky1003/cmd/launch` | 1.25.7 |
 | `filemgr/` | `github.com/ndsky1003/cmd/filemgr` | 1.25.7 |
-| `filemgr_front/` | `github.com/ndsky1003/cmd/filemgr_front` | 1.24 |
 | `structset/` | `github.com/ndsky1003/cmd/structset` | 1.25.7 |
 | `common/` | `github.com/ndsky1003/cmd/common` | 1.22 |
-
-无 `go.work`，构建必须在各工具目录内执行。
 
 ## 构建
 
@@ -20,39 +17,34 @@
 cd launch && go build -o launch .
 cd filemgr && go build -o filemgr .
 cd structset && go build -o structset .
-cd filemgr_front && wails build
 ```
 
-发布构建通过 ldflags 注入版本号：
+发布构建通过 ldflags 注入版本号（见 `.github/workflows/build-on-tag.yml`）：
+
 ```bash
 go build -ldflags="-s -w -X main.Version=v1.0.0" -o launch .
 ```
 
 ## 内部依赖
 
-各工具通过 `replace` 引用 `internal/`：
-
-```
-require github.com/ndsky1003/cmd/common v0.0.0
-replace github.com/ndsky1003/cmd/common => ../common
-```
-
-修改 `internal/` 后需在工具目录执行 `go mod tidy`。
+- `common/` 是已发布模块 `github.com/ndsky1003/cmd/common v1.0.0`，三个工具**直接 require、无 replace**。改动 `common/` 后本地构建不会自动生效，需发布新版本或临时加 `replace`。
+- 公共版本逻辑位于 `common/version` 包（`GetVersion(Version)`）。
+- `filemgr/go.mod` 含 `replace github.com/ndsky1003/crpc/v3 => ../../crpc`，依赖仓库外的兄弟目录 `crpc`（本地构建与 CI 需先 checkout 该目录）。
 
 ## 版本管理
 
 - Tag 格式：`tool/vX.Y.Z`（如 `launch/v1.0.5`）
-- 各工具声明 `var Version = "dev"`（`main.go`）
-- `internal/version.GetVersion(Version)` 按优先级解析：ldflags 注入 > go.mod build info > `"dev"`
+- 各工具 `main.go` 声明 `var Version = "dev"`
+- `common/version.GetVersion(Version)` 解析优先级：ldflags 注入 > go.mod build info > `"dev"`
 - CI 通过 `gh release create` 自动创建 Release
 
 ## CI
 
-`.github/workflows/build-on-tag.yml` — tag push 触发，前缀匹配 `launch/**`、`filemgr/**`、`structset/**`。构建 linux/darwin amd64+arm64 并发布 Release。
+`.github/workflows/build-on-tag.yml` — tag push 触发，前缀匹配 `launch/**`、`filemgr/**`、`structset/**`；构建 linux/darwin amd64+arm64 并发布 Release。
 
 ## 格式化
 
-`goimports -w .`（README 中注明，无独立配置）。
+`goimports -w .`（无独立 lint/typecheck 配置）。
 
 ## 测试
 
@@ -60,7 +52,6 @@ replace github.com/ndsky1003/cmd/common => ../common
 
 ## 其他
 
-- `gencrpc/` 目录已废弃（commit `5fe7553` 删除，目录残留），不应修改。
-- `filemgr` 依赖 `github.com/ndsky1003/crpc/v3`，运行需要 server/client 模式（`-isserver` / `-urls`）。
-- `filemgr_front` 是基于 Wails 的桌面 GUI，通过 crpc/v3 连接 `filemgr` 服务。构建使用 `wails build`。
-- `structset` 使用 `//go:embed struct_template.go.tmpl` 内嵌模板，生成后调用 `goimports -w` 格式化输出。
+- `gencrpc/` 已废弃（未纳入 git，目录残留），不应修改。
+- `filemgr` 依赖 `github.com/ndsky1003/crpc/v3`，需 server/client 模式：server `-server -suris=:18083`，client `-client -curis=... -root=... -secret=...`；`-web -wuris` 启用 Web UI。`web_index.html` 通过 `//go:embed` 内嵌。
+- `structset` 通过 `//go:embed struct_template.go.tmpl` 内嵌模板，生成后调用 `goimports -w` 格式化输出。flag：`-f` 输入文件、`-o` 输出文件、`-sub` 后缀、`-tagname` 标签名，`-k/-jm/-bm/-im/-bd/-id/-s/-i/-a/-c` 控制各生成方法。
