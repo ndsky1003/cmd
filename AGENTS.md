@@ -48,7 +48,16 @@ go build -ldflags="-s -w -X main.Version=v1.0.0" -o launch .
 
 ## 测试
 
-全仓库无 `*_test.go`，无需运行测试。
+- `launch/logger/` 有 `*_test.go`（覆盖轮转、清理、压缩、并发写），运行：`cd launch && go test ./logger/`（含 `-race`）。
+- 其余目录无测试。
+
+## launch 日志子包
+
+- `launch/logger/`（`github.com/ndsky1003/cmd/launch/logger`）包含两个策略 logger：
+  - `SizeLogger`（`size_logger.go`）：按大小轮转，可选 `Interval` 字段与时间边界混合（先到先触发）。
+  - `IntervalLogger`（`interval_logger.go`）：按时间间隔轮转（`time.Hour`/`24*time.Hour`/`7*24*time.Hour` 或任意 duration）。
+- `launch` 通过 `-split` flag 选择：`size|hour|day|week|<duration>`，`+` 组合表示混合（如 `size+day`）。
+- 两个 logger 均可通过 `OnError func(error)` 字段接收清理/压缩失败回调（未设置时用标准库 `log` 输出）。
 
 ## 其他
 

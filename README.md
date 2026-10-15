@@ -13,9 +13,9 @@
 **功能特性：**
 - 启动并管理子进程
 - 自动记录 stdout/stderr 到日志文件
-- 支持日志轮转（大小、时间、备份数量）
+- 支持日志轮转（按大小、按时间间隔、二者混合；备份数量、过期清理、压缩）
 - 可配置的日志目录和文件名
-- 自动过滤 `-r` 标志传递给子进程
+- 子进程可显式用 `-r` 指定，或直接作为第一个参数
 
 **安装：**
 ```bash
@@ -24,8 +24,19 @@ go install github.com/ndsky1003/cmd/launch@latest
 
 **使用：**
 ```bash
-# 启动一个子进程并记录日志
-launch -r /path/to/subprocess -dir=logdir -filename=app.log --arg1 --arg2
+# 方式一：直接指定子进程（推荐；子进程参数直接跟在其后，含 `-` 开头无需 `--`）
+launch -dir=logdir -filename=app.log /path/to/subprocess --arg1 --arg2
+
+# 方式二：用 -r 指定子进程（子进程参数以 `-` 开头时需用 `--` 分隔）
+launch -r /path/to/subprocess -dir=logdir -filename=app.log -- --arg1 --arg2
+
+# 按时间间隔分割：-split=hour|day|week|<duration>，文件名如 app-2026-10-15.log / app-2026-10-15-23.log
+launch -split=day -dir=logdir -filename=app.log /path/to/subprocess
+launch -split=hour -dir=logdir -filename=app.log /path/to/subprocess
+launch -split=6h -dir=logdir -filename=app.log /path/to/subprocess
+
+# size+time 混合（大小与时间边界先到先触发）：-split=size+day
+launch -split=size+day -maxsize=100 -dir=logdir -filename=app.log /path/to/subprocess
 
 # 查看版本
 launch -v
@@ -249,6 +260,13 @@ structset -v    # 输出: structset version v1.0.5
 ## 📮 联系方式
 
 - GitHub: [@ndsky1003](https://github.com/ndsky1003)
+
+## ⚠️ 已知问题（待处理）
+
+> 以下为 `launch` 日志轮转的已知边界情况，暂不影响日常使用，后续版本处理。
+
+1. **DST（夏令时）边界**：时间轮转用 `周期起始 + interval` 计算下一个边界，在夏令时切换日（23 小时或 25 小时的那天）切换时刻可能偏 1 小时；`-split=6h` 这类自定义时长以本地零点为基准截断，与日历周期语义略有差异。
+2. **备份命名用毫秒时间戳**：按大小轮转的备份文件名（`app-2006-01-02T15-04-05.000.log`）精确到毫秒，若在同一毫秒内发生两次轮转会重名覆盖。概率极低。
 
 ---
 
