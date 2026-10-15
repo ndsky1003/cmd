@@ -21,6 +21,27 @@ var (
     }
 )
 {{- end }}
+
+{{ if $.IsBsonKeys}}
+func (this *{{.StructName}}) GenBsonKeys(keys ...string) []string {
+	m := make([]string,0,len(keys))
+    if this == nil {
+        return m
+    }
+	for _, key := range keys {
+		switch key {
+        {{- range .Fields }}
+        {{- if ne .BsonTagValue "-" }}
+		case "{{.TagValue}}":
+            m=append(m,"{{.BsonTagValue}}")
+        {{- end }}
+        {{- end }}
+		}
+	}
+    return m
+}
+{{- end }}
+
 {{ if $.IsJsonM}}
 // Set{{.StructName}} 指定的值,upM
 func (this *{{.StructName}}) GenJsonM(keys ...string) map[string]any {

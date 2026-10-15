@@ -116,6 +116,7 @@ func main() {
 	flag.StringVar(&tag_name, "tagname", "structset", "提取的tag名称.eg:json")
 	flag.BoolVar(&fileStructData.IsKey, "k", true, "是否生成结构体的keys常量")
 	flag.BoolVar(&fileStructData.IsJsonM, "jm", true, "是否生成结构体的json.M")
+	flag.BoolVar(&fileStructData.IsBsonKeys, "bk", true, "是否生成结构体的Bson Key Array") //用于生成 projection
 	flag.BoolVar(&fileStructData.IsBsonM, "bm", true, "是否生成结构体的bson.M,$set")
 	flag.BoolVar(&fileStructData.IsIncM, "im", true, "是否生成结构体的bson.M,$inc")
 	flag.BoolVar(&fileStructData.IsBsonD, "bd", true, "是否生成结构体的bson.D,$set")
@@ -327,6 +328,7 @@ type FileStructData struct {
 	IsKey       bool
 	IsAllKey    bool
 	IsJsonM     bool
+	IsBsonKeys  bool
 	IsBsonM     bool //bson.M
 	IsIncM      bool //bson.M
 	IsBsonD     bool //bson.D
