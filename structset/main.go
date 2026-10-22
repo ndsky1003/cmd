@@ -201,7 +201,7 @@ func main() {
 					filedType := getFieldType(field.Type)
 
 					is_inc := lo.Contains(inc_type_keys, filedType)
-					is_inc, _, _ = get_tag_attr_is_method_func(qualifiers, is_inc, StructFieldAttr_inc, StructFieldAttr_no_inc)
+					is_inc, inc_f, inc_m := get_tag_attr_is_method_func(qualifiers, is_inc, StructFieldAttr_inc, StructFieldAttr_no_inc)
 
 					is_add := lo.Contains(inc_type_keys, filedType)
 					is_add, add_f, add_m := get_tag_attr_is_method_func(qualifiers, is_add, StructFieldAttr_add, StructFieldAttr_no_add)
@@ -218,6 +218,8 @@ func main() {
 							BsonTagValue: fix_default_tag_value(bson_tag_value, Name),
 							Type:         filedType,
 							IsInc:        is_inc,
+							IncFunc:      inc_f,
+							IncMethod:    inc_m,
 							IsAdd:        is_add,
 							AddFunc:      add_f,
 							AddMethod:    add_m,
@@ -283,6 +285,8 @@ type Field struct {
 	IsInc        bool
 	IsAdd        bool
 	IsCopy       bool
+	IncFunc      string
+	IncMethod    string
 	AddMethod    string
 	CopyMethod   string //m 是方法，属于结构体。f_是函数，属于包
 	AddFunc      string

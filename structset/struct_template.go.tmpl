@@ -180,7 +180,13 @@ func (this *{{.StructName}}) Inc(delta *{{.StructName}}, keys ...string) {
         {{- range .Fields }}
         {{- if .IsInc  }}
 		case "{{.TagValue}}":
+        {{- if ne .IncFunc ""}}
+            this.{{.Name}} = {{.IncFunc}}(this.{{.Name}},delta.{{.Name}})
+        {{- else if ne .IncMethod ""}}
+            this.{{.IncMethod}}(delta.{{.Name}})
+        {{- else }}
 			this.{{.Name}} += delta.{{.Name}}
+        {{- end }}
         {{- end }}
         {{- end }}
 		}
@@ -200,7 +206,7 @@ func (this *{{.StructName}}) Add(delta *{{.StructName}}) {
     {{- if ne .AddFunc ""}}
         this.{{.Name}} = {{.AddFunc}}(this.{{.Name}},delta.{{.Name}})
     {{- else if ne .AddMethod ""}}
-        this.{{.Name}}.{{.AddMethod}}(delta.{{.Name}})
+        this.{{.AddMethod}}(delta.{{.Name}})
     {{- else }}
 	    this.{{.Name}} += delta.{{.Name}}
     {{- end}}
@@ -224,7 +230,7 @@ func (this *{{.StructName}}) Copy(keys ...string) (delta *{{.StructName}}) {
                 {{- if ne .CopyFunc ""}}
                 delta.{{.Name}} = {{.CopyFunc}}(delta.{{.Name}},this.{{.Name}})
                 {{- else if ne .CopyMethod ""}}
-                delta.{{.Name}}.{{.CopyMethod}}(this.{{.Name}})
+                delta.{{.CopyMethod}}(this.{{.Name}})
                 {{- else }}
 	            delta.{{.Name}} = this.{{.Name}}
                 {{- end}}
