@@ -22,6 +22,22 @@ var (
 )
 {{- end }}
 
+
+{{ if $.IsBsonKeys}}
+func {{ .StructName}}_GetBsonKey(key string) string {
+		switch key {
+        {{- range .Fields }}
+        {{- if ne .BsonTagValue "-" }}
+		case "{{.TagValue}}":
+            return "{{.BsonTagValue}}"
+        {{- end }}
+        {{- end }}
+		}
+    return ""
+}
+{{- end }}
+
+
 {{ if $.IsBsonKeys}}
 func {{ .StructName}}_GenBsonKeys(keys ...string) []string {
 	m := make([]string,0,len(keys))
